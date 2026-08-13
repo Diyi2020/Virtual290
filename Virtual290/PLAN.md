@@ -397,6 +397,7 @@ Lightweight but real — enough to catch regressions, not a benchmark paper.
 - **Referential integrity under every depth combination** — not just the default. Adaptive prerequisites make it possible for core content to point at something the listener's settings filtered away. *(new at M1)*
 - **Cross-block reference invariant:** any id referenced from outside its block is defined at all three depths. *(new at M1)*
 - **Depth coverage:** every prerequisite block defines `full`, `brief` and `skip` variants.
+- **Term-before-symbol lint** *(implemented — `verify/check_lecture.mjs`)*: no technical term ("Lindbladian", "inverse temperature") spoken in a `full`-depth segment before its defining equation is written. Caught by a human at M1 — the narration said "Lindbladian" for a minute while the board never showed the GKSL form. A compiler will make this mistake constantly; the lint maps each term to the board id defining it and allows a 4-op grace window, since “we want a Lindbladian — here it is:” is correct teaching. Beyond that window, or never written at all, is a failure.
 - Coverage: fraction of the paper's theorems/lemmas at `full` or `sketch`.
 - Derived-step ratio and mean confidence.
 - ~~SymPy check pass rate~~ — **largely inapplicable to the target paper** (§6c). Keep the harness for future algebraic papers; do not count on it here.

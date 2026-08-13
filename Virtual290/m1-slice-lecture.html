@@ -41,7 +41,8 @@ body{background:#14100c;
   background:repeating-linear-gradient(97deg,rgba(233,229,216,.9) 0 2px,transparent 2px 26px),
              repeating-linear-gradient(-83deg,rgba(233,229,216,.6) 0 1px,transparent 1px 41px);filter:blur(1.4px)}
 
-#panels{position:relative;z-index:2;height:100%;display:grid;grid-template-columns:1fr 1fr 1fr}
+#panels{position:relative;z-index:2;height:100%;display:grid;grid-template-columns:repeat(3,1fr)}
+.panel.hidden{display:none}
 .panel{position:relative;padding:18px 20px 30px;overflow:hidden;display:flex;flex-direction:column;gap:9px;align-content:start}
 .panel+.panel{box-shadow:inset 1px 0 0 rgba(233,229,216,.09)}
 .panel-tag{position:absolute;bottom:6px;right:10px;font-size:10px;letter-spacing:.14em;color:var(--chalk);opacity:.16;text-transform:uppercase;pointer-events:none}
@@ -321,8 +322,15 @@ label{display:flex;align-items:center;gap:5px;color:var(--chalk-dim);cursor:poin
       <option value="0.75">0.75×</option><option value="1" selected>1×</option>
       <option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option>
     </select>
+    <select id="boards" title="Fewer, wider boards suit long formulas. Best chosen before pressing Play.">
+      <option value="3" selected>3 boards</option>
+      <option value="2">2 boards</option>
+      <option value="1">1 big board</option>
+    </select>
     <label><input type="checkbox" id="voiceOn" checked> voice</label>
+    <label title="Speak student questions aloud in a second voice. Untick to show them as text only."><input type="checkbox" id="studentVoice" checked> student voice</label>
     <select id="voicePick" title="System voices. macOS 'Premium'/'Enhanced' voices sound far better — install via System Settings → Accessibility → Spoken Content → Manage Voices."></select>
+    <button id="vrefresh" title="Rescan system voices. If a voice you just installed still does not appear, restart the browser — voices are scanned at launch.">⟳</button>
     <label><input type="checkbox" id="chalkTx" checked> chalk</label>
     <div id="prog"><i></i></div>
     <span class="hint">space = play/pause</span>
@@ -374,6 +382,12 @@ const PREREQ = [
  text:"Two design choices worth pausing on. The complete graph is what makes this mean-field: every spin feels the average of all the others, and there's no geometry to worry about. And the one over n out front is a normalisation — there are order n squared pairs, so without it the energy would grow like n squared instead of like n. With it, the energy per site stays bounded, which is what you need for a sensible thermodynamic limit."},
 {op:'say', block:'p1', depth:'full',
  text:"Now the dynamics. We want a Lindbladian that thermalises. You could write down something ad hoc, but the Davies generator is what you get from an honest derivation: couple the system to a thermal bath, take the weak-coupling limit, and this is what falls out. So it isn't a modelling choice so much as a consequence."},
+{op:'write', id:'p1L', panel:0, persist:'pinned', block:'p1', depth:'full',
+ pre:"And since I keep saying the word, it should be on the board. A Lindbladian is the generator of the most general memoryless quantum dynamics.",
+ chunks:[{tex:'\\mathcal{L}(X)=i[H,X]',say:"Script L of X equals i, commutator of H with X,"},
+         {tex:'+\\sum_a A_a^\\dagger X A_a',say:"plus the sum over a of A a dagger, X, A a"},
+         {tex:'-\\tfrac12\\{A_a^\\dagger A_a,X\\}',say:"minus one half the anticommutator of A a dagger A a with X"}],
+ post:"Heisenberg picture, so it acts on observables. The first term is coherent motion under the Hamiltonian — the H we just wrote. Everything else is dissipation through the jump operators A. The Davies generator is exactly this, with frequency-resolved jumps and thermal weights, which is where we go next."},
 {op:'write', id:'p1b', panel:0, persist:'pinned', block:'p1', depth:'full',
  pre:"The construction needs three inputs. A Hamiltonian, an inverse temperature, and a set of jump operators. Here the jumps are the single-site Paulis — three per site, three n in total. That's what the subscript loc records.",
  chunks:[{tex:'\\mathcal{L}_{\\mathrm{loc}}',say:"Script L loc,"},
@@ -385,6 +399,11 @@ const PREREQ = [
  chunks:[{tex:'A(\\omega)=\\sum_\\lambda \\Pi_{\\lambda+\\omega}A\\,\\Pi_\\lambda',
           say:"A of omega equals the sum over lambda of the projector onto lambda plus omega, A, projector onto lambda"}],
  post:"So A of omega is the part of the jump that raises the energy by exactly omega."},
+{op:'write', id:'p1beta', panel:0, persist:'pinned', block:'p1', depth:'full',
+ pre:"One more symbol before it floods every formula.",
+ chunks:[{tex:'\\beta=\\dfrac{1}{T}',say:"Beta is one over the temperature"},
+         {tex:'\\quad(k_B=1)',say:"with Boltzmann's constant set to one"}],
+ post:"So large beta is cold, small beta is hot, and the transition this whole lecture orbits sits at beta equals two."},
 {op:'write', id:'p1d', panel:0, persist:'pinned', block:'p1', depth:'full',
  pre:"Then each frequency gets a weight, and the weight is what encodes the temperature. It has to satisfy classical detailed balance — the ratio of up-rate to down-rate is the Boltzmann factor.",
  chunks:[{tex:'\\dfrac{\\gamma(\\omega)}{\\gamma(-\\omega)}=e^{-\\beta\\omega}',
@@ -567,6 +586,7 @@ const ACT2 = [
  chunks:[{tex:'\\text{known bounds}\\ \\Rightarrow\\ \\text{no phase transition}',
           say:"Every existing technique either avoids a phase transition or breaks at one"}]},
 {op:'say', act:2, text:"That's not a coincidence. Those hypotheses are all, in one way or another, ways of guaranteeing the system is in a single well-behaved phase. Which is unfortunate, because near criticality is precisely where you'd most want to know whether your algorithm still runs in polynomial time. As the authors put it, we lack a precise understanding of these algorithms exactly where they'd be most applicable."},
+{op:'say', act:2, text:"And the frontier keeps moving on the safe side of that wall — one of this paper's own authors proved, just months before this, that one-dimensional spin chains thermalize rapidly at every temperature. A strong result. But one dimension has no finite-temperature transition to cross. Different techniques, different systems, same wall."},
 {op:'point', target:'q4', act:2},
 
 {op:'head', id:'q5', panel:1, text:'Why this model', persist:'working', act:2,
@@ -648,6 +668,12 @@ const ACT2 = [
  post:"A single-site Pauli is a rank-one tensor operator. It can shift the total spin by at most one unit. So the transition matrix is tridiagonal."},
 {op:'annotate', style:'under', target:'r6', color:'yellow', act:2},
 {op:'say', act:2, text:"Tridiagonal, non-negative off the diagonal, columns summing to zero — that is a birth–death chain. Which means you are now in completely classical territory, with a century of tools available. They use Cheeger's inequality to convert the gap question into a question about the stationary measure, and then sharp tail bounds on that measure obtained by Laplace's method."},
+{op:'write', id:'r6b', panel:1, persist:'working', act:2,
+ pre:"For a birth-death chain Cheeger takes a particularly clean form, because the worst bottleneck is always an interval cut.",
+ chunks:[{tex:'\\mathrm{gap}(L)\\ \\ge\\ \\dfrac{\\Phi_*^2}{2\\,\\|L\\|_{\\infty,\\infty}}',
+          say:"The gap of L is at least the conductance squared, over twice the norm of L"}],
+ post:"So the entire question reduces to upper-bounding the cumulative mass on either side of every possible cut point — a statement purely about the stationary measure. That is what the free-energy analysis is for."},
+{op:'say', act:2, text:"One caution before we leave this sector, and it connects to a companion paper by the first author. You might hope the classical chain settles everything — that the quantum gap simply equals the gap of this embedded birth-death chain. In general it does not. That companion work shows the two gaps are comparable when the Hamiltonian's spectrum contains no long arithmetic progressions — but the Heisenberg spectrum, s times s plus one over n, is about as structured and evenly spaced as a spectrum can be. Exactly the regime where the quantum gap can lag the classical one. Which is why the remaining sectors need genuinely quantum arguments, and why this section alone was never going to be the whole proof."},
 {op:'write', id:'r7', panel:1, persist:'working', act:2,
  chunks:[{tex:'\\mathrm{gap}\\big(\\mathcal{L}_{\\mathrm{loc}}|_{\\mathcal{A}^{(0)}}\\big)=\\Omega(1),\\ \\ \\beta\\ne2',
           say:"The gap on A zero is order one, for beta away from two"}],
@@ -728,6 +754,7 @@ const ACT3 = [
           say:"f beta of x equals minus beta over four, x squared, minus the binary entropy of one plus x over two"}],
  post:"The first term is the energy, quadratic in the magnetisation as you'd expect for a ferromagnet. The second is the entropy, and H b is the binary entropy function."},
 {op:'point', target:'d1e', dive:'d1'},
+{op:'say', dive:'d1', text:"Incidentally: sixty-three pages, and this paper contains exactly one figure. It is four plots of precisely this function — beta one and a half, two, two and a half, three. You watch the minimum sit at zero, flatten, and then let go and slide into the interior as beta crosses two. If you keep one image from today, make it that one."},
 {op:'say', dive:'d1',
  text:"Now. The measure concentrates where f is smallest. So the question 'is the system magnetised?' becomes the question 'where is the minimum of f?'. And since we care about whether the minimum sits at zero or moves away from it, we should expand f around x equals zero. Let's just do it."},
 
@@ -760,6 +787,7 @@ const ACT3 = [
  text:"One more consequence, and it explains the odd exponent at criticality that I flagged earlier. To turn this free energy into the sharp tail bounds the proof needs, you apply Laplace's method: approximate the integral by a Gaussian around the minimiser. Laplace requires the second derivative there to be nonzero, and the width of that Gaussian scales like one over root n, times one over the square root of f double prime."},
 {op:'say', dive:'d1',
  text:"But at beta exactly two the quadratic term vanishes identically, so f double prime at the minimum is zero. The minimum is quartic, not quadratic. The Gaussian approximation degrades, and the fluctuation scale changes from n to the minus one half to n to the minus one quarter. That degradation is exactly why the gap estimate on this sector weakens from a constant to order n to the minus one half at criticality, and it's why the authors are careful to exclude beta equals two from their tight statement. The mathematics is telling you the truth about the physics: critical slowing down is real."},
+{op:'say', dive:'d1', text:"And a word on how the full proof is organised, because the authors' own framing is worth stealing. Appendix D calls it a tale of three regions. The window around the minimiser is the Laplace region, and it carries essentially all the mass. The left and right edges are subleading — but the right edge takes genuine care, because the polynomial prefactor in the measure has a square-root singularity at full polarisation, growing like root n, and one has to check that the exponential decay of the free energy beats it. It does. I mention it because that check is the difference between a Laplace heuristic and a proof, and it is exactly the kind of thing a lecture like this one is tempted to sweep under the rug."},
 
 /* -------------------- d2 : SU(2) mixer lower bound -------------------- */
 {op:'head', id:'d2h', panel:1, text:'Deep dive 2: lower bound Ω(1/n)', persist:'working', dive:'d2',
@@ -968,10 +996,24 @@ const board=$('#board'), overlay=$('#overlay'), hand=$('#hand'),
       cap=$('#cap'), badge=$('#badge'), prog=$('#prog i'), prof=$('#prof');
 const panels=[...document.querySelectorAll('.panel')];
 const items=new Map(); const annos=[];
-let state={playing:false, speed:1, idx:0, run:0, qa:false};
+let state={playing:false, speed:1, idx:0, run:0, qa:false, boards:3};
 const sleep=ms=>new Promise(r=>setTimeout(r, ms/state.speed));
 async function gate(){ while(!state.playing || state.qa) await new Promise(r=>setTimeout(r,60)); }
 function setState(s){ document.body.dataset.state=s; }
+
+/* ---------- board layout: 1, 2 or 3 boards ---------- */
+function setBoards(n){
+  n=Math.max(1,Math.min(3,n)); state.boards=n;
+  document.querySelector('#panels').style.gridTemplateColumns='repeat('+n+',1fr)';
+  const last=panels[n-1];
+  panels.forEach((p,i)=>{
+    if(i>=n){
+      [...p.children].forEach(c=>{ if(!c.classList.contains('panel-tag')) last.appendChild(c); });
+      p.classList.add('hidden');
+    } else p.classList.remove('hidden');
+  });
+  items.forEach(v=>autofit(v.el)); redrawAnnos(); placeProf(null);
+}
 
 /* ---------- character animation ---------- */
 const MOUTHS=['M88 93 C94 98 106 98 112 93',        // closed smile
@@ -1118,6 +1160,9 @@ function autofit(item){
 
 /* ---------- speech ---------- */
 let VOICE=null;
+let USE_SYSTEM=false;   // speak with NO explicit voice -> browser falls back to the
+                        // macOS System Voice (Spoken Content). The escape hatch for
+                        // browsers that hide downloaded premium voices from pages.
 function loadVoices(){
   const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
   if(!vs.length) return;
@@ -1135,8 +1180,17 @@ function loadVoices(){
   vs.forEach(v=>{ const o=document.createElement('option');
     o.value=v.name; o.textContent=nice(v)+(/natural|online|premium|enhanced/i.test(v.name)?' ★':'');
     sel.appendChild(o); });
-  VOICE=vs[0]; sel.value=VOICE.name;
-  sel.onchange=()=>{ VOICE=vs.find(v=>v.name===sel.value); };
+  const sys=document.createElement('option');
+  sys.value='__system';
+  sys.textContent='System default (macOS Spoken Content voice)';
+  sys.title='Speaks with whatever System Settings → Accessibility → Spoken Content → System Voice is set to. If this browser refuses to list Ava, set her as the System Voice and pick this.';
+  sel.insertBefore(sys, sel.firstChild);
+  if(USE_SYSTEM){ sel.value='__system'; }
+  else { VOICE=vs[0]; sel.value=VOICE.name; }
+  sel.onchange=()=>{
+    USE_SYSTEM = sel.value==='__system';
+    if(!USE_SYSTEM) VOICE=vs.find(v=>v.name===sel.value);
+  };
 }
 if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
 
@@ -1150,7 +1204,7 @@ function speak(text, opts={}){
     if(!$('#voiceOn').checked || !('speechSynthesis' in window))
       return setTimeout(res, estimate(text)/state.speed);
     const u=new SpeechSynthesisUtterance(text);
-    if(VOICE) u.voice=VOICE;
+    if(!USE_SYSTEM && VOICE) u.voice=VOICE;
     u.rate=Math.min(2.2, (opts.rate||0.86)*state.speed);
     u.pitch=opts.pitch||0.92;
     let done=false; const fin=()=>{ if(done) return; done=true; talking(false); res(); };
@@ -1159,6 +1213,28 @@ function speak(text, opts={}){
     speechSynthesis.speak(u);
   });
 }
+
+/* A second voice for the asking student. Randomly picked per question from the
+   installed English voices, excluding the lecturer's own. */
+function speakStudent(text){
+  return new Promise(res=>{
+    const on=document.querySelector('#voiceOn');
+    const sv=document.querySelector('#studentVoice');
+    if(sv&&!sv.checked)                       // text-only: a beat to read the caption
+      return setTimeout(res, Math.min(1800, estimate(text)*0.4)/state.speed);
+    if(!(on&&on.checked) || !('speechSynthesis' in window))
+      return setTimeout(res, estimate(text)/state.speed);
+    const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang)&&(!VOICE||v.name!==VOICE.name));
+    const u=new SpeechSynthesisUtterance(text);
+    if(vs.length) u.voice=vs[Math.floor(Math.random()*vs.length)];
+    u.rate=Math.min(2.2, 1.02*state.speed); u.pitch=1.12;   // a touch quicker and higher than the professor
+    let done=false; const fin=()=>{ if(!done){done=true;res();} };
+    u.onend=fin; u.onerror=fin;
+    setTimeout(fin, estimate(text)*2.6/state.speed);
+    speechSynthesis.speak(u);
+  });
+}
+
 function showCap(text, cls){ cap.className=cls||''; cap.textContent=text; }
 
 /* ---------- write: speak-while-writing ---------- */
@@ -1171,7 +1247,7 @@ async function revealRange(glyphs,[a,b],budget){
   await sleep(Math.max(0, budget-writeMs));
 }
 async function doWrite(op){
-  const panel=panels[op.panel];
+  const panel=panels[Math.min(op.panel, state.boards-1)];
   const item=document.createElement('div');
   item.className='item'+(op.op==='head'?' head':'')+(op.cont?' cont':'')+(op.scratch?' scratch':'');
   item.dataset.id=op.id||''; item.dataset.persist=op.persist||'working';
@@ -1284,7 +1360,7 @@ async function doPoint(op){
 const hideHand=()=>{ hand.classList.remove('show'); aimArm(null); };
 
 async function doErase(op){
-  const panel=panels[op.panel];
+  const panel=panels[Math.min(op.panel, state.boards-1)];
   const targets=[...panel.querySelectorAll('.item')].filter(el=>
     op.ids ? op.ids.includes(el.dataset.id) : el.dataset.persist!=='pinned');
   if(!targets.length) return;
@@ -1410,6 +1486,7 @@ $('#chalkTx').onchange=e=>document.body.classList.toggle('nochalk', !e.target.ch
    ============================================================================ */
 
 const NOTATION={
+ 'lindbladian':{ref:'p1L', say:"The generator of memoryless open-system dynamics: a commutator with H plus dissipator terms built from jump operators. GKSL form. The Davies generator is the thermal special case."},
  'l loc':{ref:'p1b', say:"Script L loc. The Davies generator whose jump operators are the single-site Pauli matrices, three per site."},
  'jump operator':{ref:'p1b', say:"The operators through which the bath couples. Here the single-site Paulis. They get split by Bohr frequency before they act."},
  'bohr frequency':{ref:'p1c', say:"A difference of energy eigenvalues. Each jump operator is decomposed into pieces that shift the energy by a fixed amount, and each piece gets its own rate."},
@@ -1433,9 +1510,10 @@ const NOTATION={
  'expander':{ref:'r2', say:"A bounded-degree graph whose random walk has constant spectral gap. Using expander edges rather than all transpositions is what turns an n to the minus two bound into a constant."},
  'wigner eckart':{ref:'r6', say:"The selection rule. A single-site Pauli is a rank-one tensor operator, so it can shift the total spin by at most one unit — which makes the transition matrix tridiagonal."},
  'spherical tensor':{ref:'r10', say:"T s ell q. A basis for the observable algebra diagonalising three commuting superoperators at once. In it the generator is tridiagonal in s, with coefficients independent of q."},
- 'beta':{ref:'q11', say:"Inverse temperature. Large beta is cold. The transition sits at beta equals two."},
+ 'beta':{ref:'p1beta', say:"Inverse temperature, beta equals one over T with Boltzmann's constant one. Large beta is cold. The transition sits at beta equals two."},
  'order parameter':{ref:'d3a', say:"The total magnetization S tot Z. It detects the static symmetry breaking, and in this paper it also witnesses the dynamical slowdown."},
- 'free energy':{ref:'d1e', say:"f beta of x. Energy minus entropy, as a function of rescaled magnetization. Its quadratic coefficient is two minus beta over four, and that is the phase transition."}
+ 'free energy':{ref:'d1e', say:"f beta of x. Energy minus entropy, as a function of rescaled magnetization. Its quadratic coefficient is two minus beta over four, and that is the phase transition."},
+ 'conductance':{ref:'r6b', say:"Phi star. For a birth-death chain, the worst bottleneck over interval cuts — Cheeger's inequality lower-bounds the gap by conductance squared over twice the norm of the generator."}
 };
 
 const FACTS=[
@@ -1498,6 +1576,15 @@ const FACTS=[
 
  {topic:"what this lecture skipped", keys:['what did you skip','not covered','rest of the paper','appendix','what else','omitted'], point:'r12',
   say:"The appendices, which is where most of the sixty-three pages live — the group transference machinery, the Wigner-Eckart computations, the Laplace method details, and the six-j symbol manipulations behind the monotonicity. I gave you the main text: the statements, the strategy, and three proofs in full."},
+
+ {topic:"the paper's one figure", keys:['figure','figure 1','the plot','only figure','picture','image'], point:'d1e',
+  say:"Sixty-three pages, one figure: four plots of the free energy f beta, at beta one and a half, two, two and a half and three. The minimum sits at zero, flattens at criticality, then slides into the interior. It's the whole phase transition in one image."},
+
+ {topic:"why the classical chain isn't the whole story", keys:['classical chain','embedded chain','coarse grained enough','why not classical','birth death enough','quantum versus classical'], point:'r6b',
+  say:"A companion paper by the first author shows the quantum and embedded classical gaps are comparable when the Hamiltonian's spectrum avoids long arithmetic progressions. The Heisenberg spectrum is evenly spaced — exactly the structured case where the quantum gap can lag the classical one. So the coarse-grained chain controls only its own sector, and the others need genuinely quantum arguments."},
+
+ {topic:"the tale of three regions", keys:['three regions','tale of three','laplace region','right edge','left edge','appendix d'], point:'d1i',
+  say:"The authors' framing of the tail-bound proof: a Laplace window around the minimiser carrying essentially all the mass, plus left and right edge regions that are subleading. The right edge needs care — the measure's prefactor has a root-n singularity at full polarisation that the free energy's exponential decay must beat. It does."},
 
  {topic:"what paper this is", keys:['what paper','which paper','who wrote','authors','citation','reference','arxiv'],
   say:"Basso, Bergamaschi, Lin, Ragone and Stubbs. arXiv twenty-six oh seven, two one seven nine eight, posted the twenty-third of July twenty twenty-six. Sixty-three pages and one figure, quant-ph and math-ph."}
@@ -1603,14 +1690,15 @@ async function answerWith(text, point, scratch, label, ms){
   hideHand();
 }
 
-async function handleQuestion(text){
+async function handleQuestion(text, viaVoice){
   if(!text||!text.trim()||state.qa) return;
   state.qa=true; bargeIn();
   const t0=performance.now();
   showCap('“'+text.trim()+'”','student');
   badge.className='on student'; badge.textContent='student · interrupt';
   setState('listening');
-  await new Promise(r=>setTimeout(r,600));
+  if(!viaVoice) await speakStudent(text.trim());   // typed question -> a student's voice asks it
+  await new Promise(r=>setTimeout(r,400));
 
   try{
     const R=route(text);
@@ -1694,7 +1782,7 @@ function initSR(){
     }
     if((interim+final).trim() && !state.qa) bargeIn();          // stop mid-word
     if(interim) srMsg('<span id="heard">'+interim+'…</span>');
-    if(final.trim()){ srMsg(''); handleQuestion(final.trim()); }
+    if(final.trim()){ srMsg(''); handleQuestion(final.trim(), true); }
   };
   rec.onerror=e=>{
     if(e.error==='not-allowed'||e.error==='service-not-allowed')
@@ -1748,7 +1836,7 @@ function envCheck(){
     const win=/Windows/.test(ua), mac=/Mac OS X/.test(ua);
     rows.push('<span class="warn">▲ Only basic system voices.</span> '+(
       win ? 'Open this page in <b>Microsoft Edge</b> instead — Edge exposes the Microsoft Natural neural voices, which are the best available on any platform. Big difference, no install.'
-      : mac? 'System Settings → Accessibility → Spoken Content → System Voice → <b>Manage Voices</b>, and install <b>Ava</b> or <b>Zoe (Premium)</b>. Big difference, takes a minute.'
+      : mac? 'System Settings → Accessibility → <b>Spoken Content</b> → System Voice → <b>Manage Voices</b>. On some macOS versions it lives under Accessibility → Speech instead — just search for “spoken” in System Settings. Install <b>Ava</b> or <b>Zoe (Premium)</b>, then hit <b>⟳</b> next to the voice menu; if it still does not appear, restart the browser (voices are scanned at launch).'
       : 'Install better voices for your system, or expect a robotic reading.'));
   }
 
@@ -1756,6 +1844,35 @@ function envCheck(){
 
   if(!rows.length) rows.push('<span class="ok">✓ Board, voice output and microphone all available.</span> Hold the mic button or the <b>Q</b> key to interrupt him.');
   bar.innerHTML=rows.join('<br>'); bar.classList.add('show');
+}
+
+
+/* Voice diagnostic — tells the user WHY a voice is missing instead of shrugging. */
+function voiceDiag(){
+  loadVoices();
+  const vs=('speechSynthesis' in window)?speechSynthesis.getVoices():[];
+  const en=vs.filter(v=>/^en/i.test(v.lang));
+  console.log('All voices visible to this browser:', vs.map(v=>v.name+' ['+v.lang+']'));
+  const ava=en.find(v=>/\bava\b/i.test(v.name));
+  const star=en.filter(v=>/natural|online|premium|enhanced/i.test(v.name));
+  if(ava){
+    VOICE=ava;
+    const sel=$('#voicePick'); if(sel) [...sel.options].forEach(o=>{ if(o.value===ava.name) sel.value=ava.name; });
+    srMsg('Found <b>'+ava.name+'</b> — now selected. ('+en.length+' English voices visible.)');
+  } else if(star.length){
+    srMsg(en.length+' English voices visible; best is <b>'+star[0].name+'</b>. No Ava — full list is in the browser console. If you installed her just now, fully quit the browser (Cmd-Q) and reopen.');
+  } else {
+    const legacy=en.some(v=>/zarvox|trinoids|bad news|boing/i.test(v.name));
+    if(legacy){
+      srMsg('This browser only exposes the <b>legacy</b> macOS voices (the list has Zarvox and Bad News in it) — it will never show downloaded voices like Ava, no matter how often you rescan. Two ways out: <b>1)</b> set Ava as the System Voice (System Settings → Accessibility → Spoken Content → System Voice) and pick “<b>System default</b>” at the top of the voice menu here · <b>2)</b> open this page in <b>Microsoft Edge</b>, whose ★ Natural voices work on any platform with nothing to install.');
+      return;
+    }
+    srMsg(en.length+' English voices visible, none premium. If you installed Ava: '
+      +'<b>1)</b> make sure the download actually finished — System Settings shows a progress bar under Manage Voices · '
+      +'<b>2)</b> <b>fully quit</b> the browser — Cmd-Q, not just closing the window — and reopen; voices are scanned once at launch · '
+      +'<b>3)</b> verify the install in Terminal: <code>say -v Ava hello</code> · '
+      +'<b>4)</b> if Terminal speaks but this browser stays silent, try Safari — some browsers never expose newly installed system voices. Siri voices never appear to web pages at all.');
+  }
 }
 
 let _tries=0;
@@ -1775,6 +1892,8 @@ let _tries=0;
       buildPlan(); renderCalib();
     };
   });
+  $('#vrefresh').onclick=voiceDiag;
+  $('#boards').onchange=e=>setBoards(parseInt(e.target.value,10));
   initSR();
   setTimeout(envCheck,700);                            // let voices + fonts settle first
   probeLLM().then(()=>{ if(LLM.ok) srMsg('Deep tier live via local <b>'+LLM.model+'</b>. Hold the mic or the <b>Q</b> key.'); });

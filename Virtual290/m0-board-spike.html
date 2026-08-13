@@ -281,7 +281,9 @@ label{display:flex;align-items:center;gap:5px;color:var(--chalk-dim);cursor:poin
       <option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option>
     </select>
     <label><input type="checkbox" id="voiceOn" checked> voice</label>
+    <label title="Speak student questions aloud in a second voice. Untick to show them as text only."><input type="checkbox" id="studentVoice" checked> student voice</label>
     <select id="voicePick" title="System voices. macOS 'Premium'/'Enhanced' voices sound far better — install via System Settings → Accessibility → Spoken Content → Manage Voices."></select>
+    <button id="vrefresh" title="Rescan system voices. If a voice you just installed still does not appear, restart the browser — voices are scanned at launch.">⟳</button>
     <label><input type="checkbox" id="chalkTx" checked> chalk</label>
     <div id="prog"><i></i></div>
     <span class="hint">space = play/pause</span>
@@ -611,6 +613,9 @@ function autofit(item){
 
 /* ---------- speech ---------- */
 let VOICE=null;
+let USE_SYSTEM=false;   // speak with NO explicit voice -> browser falls back to the
+                        // macOS System Voice (Spoken Content). The escape hatch for
+                        // browsers that hide downloaded premium voices from pages.
 function loadVoices(){
   const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
   if(!vs.length) return;
@@ -628,8 +633,17 @@ function loadVoices(){
   vs.forEach(v=>{ const o=document.createElement('option');
     o.value=v.name; o.textContent=nice(v)+(/natural|online|premium|enhanced/i.test(v.name)?' ★':'');
     sel.appendChild(o); });
-  VOICE=vs[0]; sel.value=VOICE.name;
-  sel.onchange=()=>{ VOICE=vs.find(v=>v.name===sel.value); };
+  const sys=document.createElement('option');
+  sys.value='__system';
+  sys.textContent='System default (macOS Spoken Content voice)';
+  sys.title='Speaks with whatever System Settings → Accessibility → Spoken Content → System Voice is set to. If this browser refuses to list Ava, set her as the System Voice and pick this.';
+  sel.insertBefore(sys, sel.firstChild);
+  if(USE_SYSTEM){ sel.value='__system'; }
+  else { VOICE=vs[0]; sel.value=VOICE.name; }
+  sel.onchange=()=>{
+    USE_SYSTEM = sel.value==='__system';
+    if(!USE_SYSTEM) VOICE=vs.find(v=>v.name===sel.value);
+  };
 }
 if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
 
@@ -643,7 +657,7 @@ function speak(text, opts={}){
     if(!$('#voiceOn').checked || !('speechSynthesis' in window))
       return setTimeout(res, estimate(text)/state.speed);
     const u=new SpeechSynthesisUtterance(text);
-    if(VOICE) u.voice=VOICE;
+    if(!USE_SYSTEM && VOICE) u.voice=VOICE;
     u.rate=Math.min(2.2, (opts.rate||0.92)*state.speed);
     u.pitch=opts.pitch||0.92;
     let done=false; const fin=()=>{ if(done) return; done=true; talking(false); res(); };
@@ -652,6 +666,28 @@ function speak(text, opts={}){
     speechSynthesis.speak(u);
   });
 }
+
+/* A second voice for the asking student. Randomly picked per question from the
+   installed English voices, excluding the lecturer's own. */
+function speakStudent(text){
+  return new Promise(res=>{
+    const on=document.querySelector('#voiceOn');
+    const sv=document.querySelector('#studentVoice');
+    if(sv&&!sv.checked)                       // text-only: a beat to read the caption
+      return setTimeout(res, Math.min(1800, estimate(text)*0.4)/state.speed);
+    if(!(on&&on.checked) || !('speechSynthesis' in window))
+      return setTimeout(res, estimate(text)/state.speed);
+    const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang)&&(!VOICE||v.name!==VOICE.name));
+    const u=new SpeechSynthesisUtterance(text);
+    if(vs.length) u.voice=vs[Math.floor(Math.random()*vs.length)];
+    u.rate=Math.min(2.2, 1.02*state.speed); u.pitch=1.12;   // a touch quicker and higher than the professor
+    let done=false; const fin=()=>{ if(!done){done=true;res();} };
+    u.onend=fin; u.onerror=fin;
+    setTimeout(fin, estimate(text)*2.6/state.speed);
+    speechSynthesis.speak(u);
+  });
+}
+
 function showCap(text, cls){ cap.className=cls||''; cap.textContent=text; }
 
 /* ---------- write: speak-while-writing ---------- */
@@ -816,7 +852,8 @@ async function doQuestion(op){
   badge.className='on student'; badge.textContent='student · interrupt';
   if('speechSynthesis' in window) speechSynthesis.cancel();
   talking(false); setState('listening');
-  await sleep(1700);
+  await speakStudent(op.text);
+  await sleep(300);
 
   if(op.tier==='deep'){
     setState('thinking'); badge.className='on deep';
@@ -1163,7 +1200,7 @@ function envCheck(){
     const win=/Windows/.test(ua), mac=/Mac OS X/.test(ua);
     rows.push('<span class="warn">▲ Only basic system voices.</span> '+(
       win ? 'Open this page in <b>Microsoft Edge</b> instead — Edge exposes the Microsoft Natural neural voices, which are the best available on any platform. Big difference, no install.'
-      : mac? 'System Settings → Accessibility → Spoken Content → System Voice → <b>Manage Voices</b>, and install <b>Ava</b> or <b>Zoe (Premium)</b>. Big difference, takes a minute.'
+      : mac? 'System Settings → Accessibility → <b>Spoken Content</b> → System Voice → <b>Manage Voices</b>. On some macOS versions it lives under Accessibility → Speech instead — just search for “spoken” in System Settings. Install <b>Ava</b> or <b>Zoe (Premium)</b>, then hit <b>⟳</b> next to the voice menu; if it still does not appear, restart the browser (voices are scanned at launch).'
       : 'Install better voices for your system, or expect a robotic reading.'));
   }
 
@@ -1171,6 +1208,35 @@ function envCheck(){
 
   if(!rows.length) rows.push('<span class="ok">✓ Board, voice output and microphone all available.</span> Hold the mic button or the <b>Q</b> key to interrupt him.');
   bar.innerHTML=rows.join('<br>'); bar.classList.add('show');
+}
+
+
+/* Voice diagnostic — tells the user WHY a voice is missing instead of shrugging. */
+function voiceDiag(){
+  loadVoices();
+  const vs=('speechSynthesis' in window)?speechSynthesis.getVoices():[];
+  const en=vs.filter(v=>/^en/i.test(v.lang));
+  console.log('All voices visible to this browser:', vs.map(v=>v.name+' ['+v.lang+']'));
+  const ava=en.find(v=>/\bava\b/i.test(v.name));
+  const star=en.filter(v=>/natural|online|premium|enhanced/i.test(v.name));
+  if(ava){
+    VOICE=ava;
+    const sel=$('#voicePick'); if(sel) [...sel.options].forEach(o=>{ if(o.value===ava.name) sel.value=ava.name; });
+    srMsg('Found <b>'+ava.name+'</b> — now selected. ('+en.length+' English voices visible.)');
+  } else if(star.length){
+    srMsg(en.length+' English voices visible; best is <b>'+star[0].name+'</b>. No Ava — full list is in the browser console. If you installed her just now, fully quit the browser (Cmd-Q) and reopen.');
+  } else {
+    const legacy=en.some(v=>/zarvox|trinoids|bad news|boing/i.test(v.name));
+    if(legacy){
+      srMsg('This browser only exposes the <b>legacy</b> macOS voices (the list has Zarvox and Bad News in it) — it will never show downloaded voices like Ava, no matter how often you rescan. Two ways out: <b>1)</b> set Ava as the System Voice (System Settings → Accessibility → Spoken Content → System Voice) and pick “<b>System default</b>” at the top of the voice menu here · <b>2)</b> open this page in <b>Microsoft Edge</b>, whose ★ Natural voices work on any platform with nothing to install.');
+      return;
+    }
+    srMsg(en.length+' English voices visible, none premium. If you installed Ava: '
+      +'<b>1)</b> make sure the download actually finished — System Settings shows a progress bar under Manage Voices · '
+      +'<b>2)</b> <b>fully quit</b> the browser — Cmd-Q, not just closing the window — and reopen; voices are scanned once at launch · '
+      +'<b>3)</b> verify the install in Terminal: <code>say -v Ava hello</code> · '
+      +'<b>4)</b> if Terminal speaks but this browser stays silent, try Safari — some browsers never expose newly installed system voices. Siri voices never appear to web pages at all.');
+  }
 }
 
 let _tries=0;
@@ -1182,6 +1248,7 @@ let _tries=0;
     }
     return setTimeout(ready,60);
   }
+  $('#vrefresh').onclick=voiceDiag;
   initSR();
   setTimeout(envCheck,700);                            // let voices + fonts settle first
   probeLLM().then(()=>{ if(LLM.ok) srMsg('Deep tier live via local <b>'+LLM.model+'</b>. Hold the mic or the <b>Q</b> key.'); });

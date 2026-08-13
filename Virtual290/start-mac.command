@@ -1,38 +1,67 @@
 #!/bin/bash
-# Virtual290 — M0 board spike launcher (macOS / Linux)
+# Virtual290 — launcher (macOS / Linux).
 # Serves this folder on localhost so the microphone and math fonts work.
-# Double-click this file. If macOS refuses, right-click → Open → Open.
+#
+# Double-click me. If macOS complains:
+#   "unidentified developer"  -> right-click me -> Open -> Open   (once only)
+#   "you do not have permission" / nothing happens ->
+#        open Terminal and run:   bash start-mac.command
+#
+# NOTE: we probe tools by RUNNING them, not by checking they exist. A stock Mac
+# ships a /usr/bin/python3 stub that pops the Xcode-tools install dialog instead
+# of running Python — "command -v python3" finds it and lies. System ruby has no
+# such trap, so it is tried first.
 
 cd "$(dirname "$0")" || exit 1
-PORT=8731
-URL="http://localhost:$PORT/m0-board-spike.html"
 
-# find something that can serve a directory
-if   command -v python3 >/dev/null 2>&1; then SERVE=(python3 -m http.server "$PORT")
-elif command -v python  >/dev/null 2>&1; then SERVE=(python  -m http.server "$PORT")
-elif command -v npx     >/dev/null 2>&1; then SERVE=(npx --yes serve -l "$PORT" .)
-elif command -v ruby    >/dev/null 2>&1; then SERVE=(ruby -run -e httpd . -p "$PORT")
-elif command -v php     >/dev/null 2>&1; then SERVE=(php -S "localhost:$PORT")
-else
+# find a free port (connection refused = free)
+PORT=""
+for P in 8731 8732 8733 8734; do
+  if ! (echo > "/dev/tcp/127.0.0.1/$P") 2>/dev/null; then PORT=$P; break; fi
+done
+[ -z "$PORT" ] && PORT=8735
+URL="http://localhost:$PORT/m1-slice-lecture.html"
+
+open_url() {
+  ( sleep 1.2
+    if   command -v open     >/dev/null 2>&1; then open "$URL"
+    elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL"
+    fi ) &
+}
+
+banner() {
   echo
-  echo "  No local web server found (needs python3, node, ruby or php)."
-  echo "  You can still use the demo: just double-click m0-board-spike.html."
-  echo "  Everything works except the microphone — use the text box instead."
+  echo "  Virtual290"
+  echo "  Serving at $URL   (server: $1)"
+  echo "  Leave this window open. Press Ctrl-C, or just close it, when done."
   echo
-  read -r -p "  Press Return to open it that way. " _
-  command -v open >/dev/null 2>&1 && open "m0-board-spike.html" || xdg-open "m0-board-spike.html"
-  exit 0
+}
+
+# ---- probes actually RUN each tool ----------------------------------------
+if ruby -e 'exit 0' >/dev/null 2>&1; then
+  banner ruby; open_url
+  exec ruby -run -e httpd . -p "$PORT"
+fi
+
+if python3 -c 'pass' >/dev/null 2>&1; then
+  banner python3; open_url
+  exec python3 -m http.server "$PORT"
+fi
+
+if python -c 'pass' >/dev/null 2>&1; then
+  banner python; open_url
+  exec python -m http.server "$PORT"
+fi
+
+if npx --version >/dev/null 2>&1; then
+  banner "npx serve"; open_url
+  exec npx --yes serve -l "$PORT" .
 fi
 
 echo
-echo "  Virtual290 — board spike"
-echo "  Serving at $URL"
-echo "  Leave this window open. Press Ctrl-C (or just close it) when you're done."
+echo "  No usable web server found (tried ruby, python3, python, npx)."
+echo "  Opening the demo directly instead — everything works except the"
+echo "  microphone in Chrome/Edge; type your questions in the text box."
 echo
-
-( sleep 1.2
-  if   command -v open     >/dev/null 2>&1; then open "$URL"
-  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL"
-  fi ) &
-
-"${SERVE[@]}"
+command -v open >/dev/null 2>&1 && open "m1-slice-lecture.html" || xdg-open "m1-slice-lecture.html"
+read -r -p "  Press Return to close this window. " _

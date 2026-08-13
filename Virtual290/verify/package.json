@@ -1,0 +1,14 @@
+{
+  "name": "virtual290-verify",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Board-script verification suite. Run against any lecture before playing it.",
+  "scripts": {
+    "check": "node check_lecture.mjs ../m1-slice-lecture.html",
+    "check:m0": "node check_lecture.mjs ../m0-board-spike.html"
+  },
+  "dependencies": {
+    "katex": "^0.16.9"
+  }
+}
