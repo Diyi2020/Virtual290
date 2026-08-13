@@ -1,4 +1,4 @@
-# Virtual290-Agentic AI for Mathematical and Scientific Communication
+# Virtual290-Agentic AI for Mathematical Communication
 
 An AI lecturer that teaches a mathematics paper on a blackboard — writing and narrating in sync, chalk-style, and interruptible by voice: ask a question mid-proof and it stops, answers, and picks up where it left off.
 
