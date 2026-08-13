@@ -1,0 +1,99 @@
+# Virtual290 — model configuration.
+#
+# Code refers to ROLES, never to model names. Swap providers by editing this
+# file; nothing in the compiler changes.
+#
+# KEYS ARE NEVER STORED HERE. Every `api_key_env` below names an environment
+# variable you set yourself:
+#     export OPENAI_API_KEY=sk-...
+#     export ANTHROPIC_API_KEY=sk-ant-...
+# Nothing in this repo reads, logs, or transmits a key anywhere except to the
+# provider it belongs to.
+#
+# ── A note on ChatGPT Pro ────────────────────────────────────────────────────
+# A ChatGPT Pro subscription is NOT API access. They are separate products with
+# separate billing, and a Pro plan grants no API credits. Driving the ChatGPT
+# web interface programmatically also breaches OpenAI's terms of service, so
+# this project does not do it and will not support it. To use OpenAI models
+# here, create an API key at platform.openai.com — billed separately from Pro.
+# ─────────────────────────────────────────────────────────────────────────────
+
+active_profile: hybrid
+
+profiles:
+
+  # Everything remote. Best quality, ~$1-5 per paper compiled.
+  remote:
+    compiler:  {provider: anthropic, model: claude-opus-5,  thinking: true, max_tokens: 32000}
+    critic:    {provider: openai,    model: gpt-5,          reasoning_effort: high}
+    narrator:  {provider: anthropic, model: claude-sonnet-5}
+    fast:      {provider: openai,    model: gpt-realtime-2.1-mini, native_audio: true}
+    deep:      {provider: anthropic, model: claude-opus-5,  thinking: true}
+
+  # Compile remotely, serve the live lecture from a local model.
+  hybrid:
+    compiler:  {provider: anthropic, model: claude-opus-5,  thinking: true, max_tokens: 32000}
+    critic:    {provider: openai,    model: gpt-5,          reasoning_effort: high}
+    narrator:  {provider: anthropic, model: claude-sonnet-5}
+    fast:      {provider: openai_compatible, model: qwen3.5-9b-instruct,
+                base_url: "http://localhost:8000/v1", structured_output: grammar}
+    deep:      {provider: anthropic, model: claude-opus-5,  thinking: true}
+
+  # No network at all. For papers you can't send anywhere.
+  airgapped:
+    compiler:  {provider: openai_compatible, model: qwen3.6-32b,
+                base_url: "http://localhost:8000/v1", structured_output: grammar}
+    critic:    {provider: openai_compatible, model: gemma-4-27b,     # different family — deliberate
+                base_url: "http://localhost:8001/v1", structured_output: grammar}
+    fast:      {provider: ollama, model: gemma-4-8b, base_url: "http://localhost:11434"}
+    deep:      {provider: openai_compatible, model: qwen3.6-32b,
+                base_url: "http://localhost:8000/v1"}
+
+providers:
+  anthropic:          {api_key_env: ANTHROPIC_API_KEY, base_url: "https://api.anthropic.com"}
+  openai:             {api_key_env: OPENAI_API_KEY,    base_url: "https://api.openai.com/v1"}
+  google:             {api_key_env: GOOGLE_API_KEY}
+  # Works with OpenAI, Together, Groq, Fireworks, vLLM, LM Studio, llama.cpp —
+  # anything speaking the OpenAI chat-completions protocol.
+  openai_compatible:  {api_key_env: LOCAL_API_KEY, api_key_optional: true}
+  ollama:             {api_key_optional: true}
+
+roles:
+  compiler:
+    purpose: "Semantic graph -> BIL v0.2 board script. The quality-critical call."
+    needs: [long_context, structured_output, reasoning]
+    min_context: 128000
+  critic:
+    purpose: "Independent review of the compiler's output. Flags unsupported steps."
+    needs: [reasoning]
+    # Enforced at load time: a critic sharing the compiler's family is refused.
+    # Self-review reproduces the reviewer's own blind spots and is close to worthless.
+    require_different_family_from: compiler
+  narrator:
+    purpose: "LaTeX -> spoken form. Produces the `say` half of every BIL chunk."
+    needs: [structured_output]
+  fast:
+    purpose: "Live Q&A that misses the notation table and fact base. <2s."
+    needs: [tool_calling]
+    max_context: 4000          # never send the paper; send the beat + retrieved nodes
+  deep:
+    purpose: "Questions outside the graph. Visible thinking is expected."
+    needs: [reasoning, reasoning_trace]
+
+budget:
+  max_usd_per_paper: 10.00
+  max_usd_per_session: 2.00
+  warn_if_no_prompt_caching: true    # caching is a ~4x swing on the live path
+
+verification:
+  # Every generated board script must clear these before it can be played.
+  # All are implemented and currently passing on the hand-authored lecture.
+  require:
+    - latex_compiles                 # KaTeX, throwOnError
+    - chunk_glyph_alignment          # speech stays in sync with handwriting
+    - referential_integrity          # under EVERY prerequisite-depth combination
+    - cross_block_reference          # referenced ids defined at all three depths
+    - depth_coverage                 # every block defines full/brief/skip
+    - narration_coverage             # no write-chunk without a spoken form
+    - character_occlusion            # staged lecturer never covers the live line
+    - provenance_tagged              # every line verbatim | derived | prerequisite

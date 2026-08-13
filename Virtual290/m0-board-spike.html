@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual290 — M0 Board Spike v2</title>
+<!-- KaTeX is vendored in assets/ so this runs with no internet.
+     If assets/ is missing (e.g. only the .html was shared), fall back to the CDN. -->
+<link id="kcss" rel="stylesheet" href="assets/katex/katex.min.css"
+      onerror="this.onerror=null;this.href='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'">
+<script defer src="assets/katex/katex.min.js"
+      onerror="this.onerror=null;var s=document.createElement('script');s.defer=true;s.src='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js';document.head.appendChild(s);"></script>
+<style>
+:root{
+  --board-bg:#22302b; --board-bg2:#1a2521;
+  --chalk:#e9e5d8; --chalk-dim:#b9c2b4;
+  --chalk-yellow:#f2d98a; --chalk-blue:#a8cbe0;
+  --math-size:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+/* chalk-ish handwriting: macOS ships Chalkduster/Bradley Hand, Windows ships Ink Free
+   (Win10+) and Segoe Script, Linux usually falls through to generic cursive. Math glyphs
+   come from vendored KaTeX fonts, so formulas look identical on every platform. */
+body{background:#14100c;
+     font-family:'Chalkduster','Bradley Hand','Ink Free','Segoe Script','Comic Sans MS',cursive;
+     color:var(--chalk);overflow:hidden;-webkit-font-smoothing:antialiased}
+
+#stage{position:relative;height:100vh;display:flex;flex-direction:column;padding:14px 14px 0}
+#board{
+  position:relative;flex:1;min-height:0;border:14px solid #3d2b1d;border-radius:4px;
+  box-shadow:0 0 0 2px #241a12,0 18px 50px rgba(0,0,0,.7),inset 0 0 120px rgba(0,0,0,.55);
+  background:radial-gradient(120% 80% at 22% 18%,#2a3a33 0%,transparent 60%),
+             radial-gradient(90% 70% at 78% 75%,#26352f 0%,transparent 65%),
+             linear-gradient(180deg,var(--board-bg) 0%,var(--board-bg2) 100%);
+  overflow:hidden;
+}
+#board::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:6;opacity:.16;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+#board::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.055;
+  background:repeating-linear-gradient(97deg,rgba(233,229,216,.9) 0 2px,transparent 2px 26px),
+             repeating-linear-gradient(-83deg,rgba(233,229,216,.6) 0 1px,transparent 1px 41px);filter:blur(1.4px)}
+
+#panels{position:relative;z-index:2;height:100%;display:grid;grid-template-columns:1fr 1fr 1fr}
+.panel{position:relative;padding:18px 20px 30px;overflow:hidden;display:flex;flex-direction:column;gap:9px;align-content:start}
+.panel+.panel{box-shadow:inset 1px 0 0 rgba(233,229,216,.09)}
+.panel-tag{position:absolute;bottom:6px;right:10px;font-size:10px;letter-spacing:.14em;color:var(--chalk);opacity:.16;text-transform:uppercase;pointer-events:none}
+
+.item{position:relative;max-width:100%;line-height:1.32}
+.item .fit{transform-origin:left top;display:block}
+.item.head{margin-top:6px;margin-bottom:2px;font-size:17px}
+.item.head::after{content:'';display:block;height:1px;margin-top:5px;width:72%;
+  background:linear-gradient(90deg,rgba(233,229,216,.75),rgba(233,229,216,.05));transform:rotate(-.35deg);opacity:0;transition:opacity .5s .25s}
+.item.head.done::after{opacity:.85}
+.item.cont{padding-left:26px;margin-top:-3px}
+.item.scratch{opacity:.72;font-size:.9em}
+.item.chalked{filter:url(#chalkRough)}
+body.nochalk .item.chalked{filter:none}
+.katex{font-size:var(--math-size)!important;color:var(--chalk)}
+.item.scratch .katex{color:var(--chalk-dim)}
+.prov{position:absolute;left:-11px;top:.42em;width:3px;height:calc(100% - .8em);min-height:10px;
+  background:var(--chalk-yellow);opacity:0;border-radius:2px;transition:opacity .5s}
+.item.done .prov{opacity:.42}
+.prov:hover{opacity:.95}
+
+.glyph{display:inline-block;opacity:0;transform:rotate(var(--rot,0deg)) translateY(var(--dy,0px));
+  text-shadow:0 0 1.1px rgba(255,255,255,.42),0 0 5px rgba(233,229,216,.10)}
+.glyph.inked{animation:ink 150ms cubic-bezier(.3,.7,.4,1) forwards}
+@keyframes ink{0%{opacity:0;clip-path:inset(0 100% 0 0);filter:blur(.7px)}55%{opacity:.95}100%{opacity:1;clip-path:inset(0 -8% 0 0);filter:blur(0)}}
+
+#overlay{position:absolute;inset:0;z-index:4;pointer-events:none}
+#overlay path,#overlay rect{fill:none;stroke-linecap:round;stroke-linejoin:round;filter:url(#chalkRough);
+  stroke-dasharray:var(--len,600);stroke-dashoffset:var(--len,600);animation:draw var(--dur,600ms) ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+#overlay text{fill:var(--chalk-yellow);font-family:'Chalkduster','Comic Sans MS',cursive;font-size:12px;opacity:0;animation:fadein .5s .35s forwards}
+@keyframes fadein{to{opacity:.9}}
+
+.eraser{position:absolute;left:0;right:0;height:46px;z-index:5;pointer-events:none;filter:blur(3px);
+  background:linear-gradient(180deg,rgba(233,229,216,0),rgba(233,229,216,.09) 35%,rgba(233,229,216,.14) 55%,rgba(233,229,216,0))}
+.item.wiped{opacity:0;filter:blur(2.5px);transition:opacity .38s,filter .38s,height .3s .25s,margin .3s .25s}
+.smudge{position:absolute;z-index:1;pointer-events:none;border-radius:50%;filter:blur(6px);
+  background:radial-gradient(ellipse,rgba(233,229,216,.10),transparent 70%)}
+
+#hand{position:absolute;z-index:7;width:44px;height:56px;left:0;top:0;opacity:0;
+  transition:transform .5s cubic-bezier(.22,.8,.3,1),opacity .3s;will-change:transform;pointer-events:none;
+  filter:drop-shadow(0 3px 7px rgba(0,0,0,.55))}
+#hand.show{opacity:.95}
+
+/* ---------------- cartoon professor ---------------- */
+/* He walks along the foot of the board to stay out of the way of what he's
+   writing. Opacity duck is the last resort — never hide the mathematics. */
+#prof{position:absolute;left:0;bottom:0;z-index:7;width:185px;height:270px;pointer-events:none;
+  filter:drop-shadow(0 6px 18px rgba(0,0,0,.5));will-change:transform;
+  transition:transform .95s cubic-bezier(.4,.05,.3,1),opacity .45s}
+#prof.duck{opacity:.28}
+#prof svg{width:100%;height:100%;overflow:visible}
+#armR{transition:transform .6s cubic-bezier(.22,.8,.3,1);transform-origin:126px 150px}
+#armL{transition:transform .6s cubic-bezier(.22,.8,.3,1);transform-origin:74px 150px}
+body[data-state="thinking"] #armL{transform:rotate(-58deg)}
+#brows{transition:transform .3s}
+body[data-state="thinking"] #brows{transform:translateY(-3px)}
+body[data-state="listening"] #brows{transform:translateY(-4px)}
+#eyeL,#eyeR{transition:transform .08s;transform-origin:center}
+#eyeL.blink,#eyeR.blink{transform:scaleY(.12)}
+#bubble{opacity:0;transition:opacity .35s}
+body[data-state="thinking"] #bubble{opacity:1}
+#bubble circle{fill:#e9e5d8;opacity:.5}
+#bubble circle:nth-child(1){animation:blip 1.2s infinite}
+#bubble circle:nth-child(2){animation:blip 1.2s .2s infinite}
+#bubble circle:nth-child(3){animation:blip 1.2s .4s infinite}
+@keyframes blip{0%,100%{opacity:.18}50%{opacity:.85}}
+#prof .mouth{transition:d .09s}
+
+/* ---------------- caption + controls ---------------- */
+#caption{position:relative;z-index:8;min-height:56px;display:flex;align-items:center;gap:12px;padding:10px 16px;margin-top:10px}
+#badge{flex:none;font-size:10px;letter-spacing:.13em;text-transform:uppercase;padding:5px 10px;
+  border:1px solid rgba(233,229,216,.28);border-radius:999px;color:var(--chalk-dim);opacity:0;transition:opacity .3s;white-space:nowrap}
+#badge.on{opacity:.85}
+#badge.student{color:var(--chalk-blue);border-color:rgba(168,203,224,.5)}
+#badge.deep{color:var(--chalk-yellow);border-color:rgba(242,217,138,.5)}
+#cap{font-size:16px;line-height:1.45;opacity:.9}
+#cap.student{color:var(--chalk-blue)}
+#cap .lit{color:var(--chalk-yellow);opacity:.95}
+
+#controls{position:relative;z-index:8;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:0 16px 12px;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;font-size:12px}
+button,select{font:inherit;background:rgba(233,229,216,.06);color:var(--chalk);
+  border:1px solid rgba(233,229,216,.22);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{background:rgba(233,229,216,.14)}
+select{max-width:190px}
+label{display:flex;align-items:center;gap:5px;color:var(--chalk-dim);cursor:pointer;user-select:none}
+#prog{flex:1;min-width:100px;height:3px;background:rgba(233,229,216,.13);border-radius:2px;overflow:hidden}
+#prog i{display:block;height:100%;width:0;background:var(--chalk-dim);transition:width .3s}
+.hint{color:rgba(233,229,216,.35)}
+#note{position:absolute;top:12px;right:14px;z-index:9;font-family:ui-sans-serif,system-ui,sans-serif;
+  font-size:10px;color:rgba(233,229,216,.3);letter-spacing:.08em;text-transform:uppercase}
+
+/* ---------------- ask bar ---------------- */
+#ask{position:relative;z-index:8;display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  padding:9px 16px 14px;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;font-size:12px;
+  border-top:1px solid rgba(233,229,216,.08)}
+#mic{border-color:rgba(242,217,138,.4);color:var(--chalk-yellow);min-width:120px}
+#mic.live{background:rgba(242,217,138,.18);animation:pulse 1.1s infinite}
+#mic:disabled{opacity:.35;cursor:not-allowed;animation:none}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,217,138,.35)}50%{box-shadow:0 0 0 7px rgba(242,217,138,0)}}
+#qtext{flex:1;min-width:200px;font:inherit;background:rgba(233,229,216,.06);color:var(--chalk);
+  border:1px solid rgba(233,229,216,.22);border-radius:6px;padding:7px 11px}
+#qtext::placeholder{color:rgba(233,229,216,.32)}
+#srstat{font-size:11px;color:rgba(233,229,216,.4);max-width:100%}
+#srstat b{color:var(--chalk-yellow);font-weight:600}
+#heard{color:var(--chalk-blue);font-style:italic}
+#envbar{padding:0 16px 12px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;
+  color:rgba(233,229,216,.42);line-height:1.6;display:none}
+#envbar.show{display:block}
+#envbar .ok{color:#9fc4a4}#envbar .warn{color:var(--chalk-yellow)}#envbar .bad{color:#e0a0a0}
+#envbar code{background:rgba(233,229,216,.1);padding:1px 5px;border-radius:3px;font-size:10.5px}
+</style>
+</head>
+<body data-state="idle">
+
+<svg width="0" height="0" style="position:absolute">
+  <filter id="chalkRough" x="-6%" y="-8%" width="112%" height="116%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.055" numOctaves="3" seed="11" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="1.7" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <marker id="arrowhead" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0,0 L7,3.5 L0,7" fill="none" stroke="#f2d98a" stroke-width="1.4"/>
+  </marker>
+</svg>
+
+<div id="stage">
+  <div id="board">
+    <div id="note">M0 spike v2 · no AI · hand-authored board script</div>
+    <div id="panels">
+      <div class="panel" data-p="0"><span class="panel-tag">board 1</span></div>
+      <div class="panel" data-p="1"><span class="panel-tag">board 2</span></div>
+      <div class="panel" data-p="2"><span class="panel-tag">board 3</span></div>
+    </div>
+    <svg id="overlay"></svg>
+
+    <div id="hand">
+      <svg viewBox="0 0 44 56">
+        <g fill="none" stroke="#e9e5d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+          <path d="M13 6 L13 26"/>
+          <path d="M13 26 C10 28 8.5 32 9.5 37 C10.5 44.5 16 51 23 52 C31 53 37 48 37.5 41 L37.5 28
+                   M37.5 28 C37.5 25.6 34 25.6 34 28 L34 34.5 M34 31.5 C34 29 30.5 29 30.5 31.5 L30.5 35.5
+                   M30.5 32.5 C30.5 30 27 30 27 32.5 L27 36.5"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- cartoon professor: generic character, not a likeness of any real person -->
+    <div id="prof">
+      <svg viewBox="0 0 200 340">
+        <defs>
+          <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#7e9db4"/><stop offset="1" stop-color="#5d7c93"/>
+          </linearGradient>
+          <linearGradient id="vest" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8a6f52"/><stop offset="1" stop-color="#6d573f"/>
+          </linearGradient>
+        </defs>
+
+        <!-- legs / lower body fading into the floor -->
+        <path d="M78 300 L74 340 M122 300 L126 340" stroke="#4a4038" stroke-width="20" stroke-linecap="round" opacity=".55"/>
+
+        <!-- left arm (character's right) -->
+        <g id="armL">
+          <path d="M74 150 L46 200 L40 232" fill="none" stroke="url(#shirt)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="39" cy="238" r="11" fill="#e8b287"/>
+        </g>
+
+        <!-- torso -->
+        <path d="M62 148 C62 128 78 118 100 118 C122 118 138 128 138 148 L142 302 L58 302 Z" fill="url(#shirt)"/>
+        <path d="M74 146 C74 130 84 122 100 122 C116 122 126 130 126 146 L128 300 L72 300 Z" fill="url(#vest)" opacity=".92"/>
+        <path d="M100 122 L100 300" stroke="#5a4733" stroke-width="1.6" opacity=".5"/>
+        <circle cx="100" cy="176" r="2.6" fill="#4a3a2a" opacity=".7"/>
+        <circle cx="100" cy="212" r="2.6" fill="#4a3a2a" opacity=".7"/>
+        <circle cx="100" cy="248" r="2.6" fill="#4a3a2a" opacity=".7"/>
+        <!-- collar -->
+        <path d="M82 122 L100 142 L118 122 L112 116 L100 128 L88 116 Z" fill="#f0efe9"/>
+
+        <!-- neck + head -->
+        <path d="M90 100 L90 124 L110 124 L110 100 Z" fill="#d69b6e"/>
+        <ellipse cx="100" cy="66" rx="37" ry="41" fill="#e8b287"/>
+        <path d="M63 66 C63 70 60 74 58 72" fill="#e8b287"/>
+        <ellipse cx="62" cy="70" rx="6" ry="9" fill="#e8b287"/>
+        <ellipse cx="138" cy="70" rx="6" ry="9" fill="#e8b287"/>
+
+        <!-- hair -->
+        <path d="M63 58 C63 30 80 21 100 21 C122 21 138 32 137 60
+                 C133 44 120 40 104 43 C90 45 76 44 70 52 C67 55 65 58 63 58 Z" fill="#33302f"/>
+        <path d="M137 60 C140 47 134 33 122 27 C132 34 134 46 133 56 Z" fill="#3d3a38"/>
+
+        <!-- brows -->
+        <g id="brows">
+          <path d="M74 52 C80 47 90 47 95 51" stroke="#33302f" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+          <path d="M105 51 C110 47 120 47 126 52" stroke="#33302f" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+        </g>
+
+        <!-- eyes -->
+        <ellipse id="eyeL" cx="85" cy="66" rx="5.2" ry="6.2" fill="#2c2620"/>
+        <ellipse id="eyeR" cx="115" cy="66" rx="5.2" ry="6.2" fill="#2c2620"/>
+        <circle cx="86.8" cy="63.6" r="1.7" fill="#fff" opacity=".85"/>
+        <circle cx="116.8" cy="63.6" r="1.7" fill="#fff" opacity=".85"/>
+
+        <!-- glasses -->
+        <g fill="none" stroke="#37373f" stroke-width="3">
+          <rect x="70" y="54" width="30" height="24" rx="9" fill="#cfe4ee" fill-opacity=".13"/>
+          <rect x="100" y="54" width="30" height="24" rx="9" fill="#cfe4ee" fill-opacity=".13"/>
+          <path d="M100 64 L100 64.5"/>
+          <path d="M70 62 L60 66 M130 62 L140 66" stroke-width="2.6"/>
+        </g>
+
+        <!-- nose + mouth -->
+        <path d="M100 70 C97 79 96 82 101 84" stroke="#c98f62" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <path class="mouth" id="mouth" d="M88 93 C94 98 106 98 112 93" stroke="#8c4a3c" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+        <!-- right arm (writing arm) -->
+        <g id="armR">
+          <path d="M126 150 L158 196 L166 224" fill="none" stroke="url(#shirt)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="167" cy="230" r="11" fill="#e8b287"/>
+          <rect x="163" y="234" width="8" height="17" rx="3" fill="#f2efe4" transform="rotate(14 167 242)"/>
+        </g>
+
+        <g id="bubble"><circle cx="150" cy="34" r="3.4"/><circle cx="162" cy="27" r="3.4"/><circle cx="174" cy="20" r="3.4"/></g>
+      </svg>
+    </div>
+  </div>
+
+  <div id="caption">
+    <span id="badge"></span>
+    <span id="cap">Press <b>Play</b> — Banach fixed-point theorem, ~9 minutes.</span>
+  </div>
+
+  <div id="controls">
+    <button id="play">▶ Play</button>
+    <button id="restart">↺ Restart</button>
+    <select id="speed">
+      <option value="0.75">0.75×</option><option value="1" selected>1×</option>
+      <option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option>
+    </select>
+    <label><input type="checkbox" id="voiceOn" checked> voice</label>
+    <select id="voicePick" title="System voices. macOS 'Premium'/'Enhanced' voices sound far better — install via System Settings → Accessibility → Spoken Content → Manage Voices."></select>
+    <label><input type="checkbox" id="chalkTx" checked> chalk</label>
+    <div id="prog"><i></i></div>
+    <span class="hint">space = play/pause</span>
+  </div>
+
+  <div id="ask">
+    <button id="mic" title="Hold to talk (or hold the Q key)">🎤 Hold to ask</button>
+    <label><input type="checkbox" id="alwaysOn"> always listening</label>
+    <input id="qtext" placeholder="…or type a question and press Enter — try “why is that Cauchy?” or “what is q?”">
+    <span id="srstat"></span>
+  </div>
+  <div id="envbar"></div>
+</div>
+
+<script>
+/* ============================================================================
+   BOARD SCRIPT
+   A `write` op is a list of {tex, say} chunks. The glyphs for chunk k are
+   revealed while chunk k is spoken — the professor says what he writes, as he
+   writes it. `pre` / `post` carry the commentary around the literal reading.
+   RULE: every chunk must be independently well-formed LaTeX.
+   ============================================================================ */
+const SCRIPT = [
+{op:'say', text:"Alright. Today: the Banach fixed-point theorem. It's the workhorse behind existence proofs for differential equations, and the whole thing fits on three boards."},
+
+{op:'head', id:'h0', panel:0, text:'Setup', persist:'pinned', say:"Let me set up."},
+{op:'write', id:'d1', panel:0, persist:'pinned',
+ pre:"One definition, and everything follows from it.",
+ chunks:[{tex:'\\textbf{Def.}',say:"Definition."},
+         {tex:'T:X\\to X',say:"T from X to X"},
+         {tex:'\\text{ is a }\\textit{contraction}',say:"is a contraction"}]},
+{op:'write', id:'d2', panel:0, persist:'pinned', cont:true,
+ chunks:[{tex:'\\text{if }\\exists\\, q',say:"if there is some q"},
+         {tex:'\\in[0,1):',say:"in the interval zero to one, one excluded,"}]},
+{op:'write', id:'d3', panel:0, persist:'pinned', cont:true,
+ chunks:[{tex:'d(Tx,Ty)',say:"d of T x, T y"},
+         {tex:'\\le',say:"is at most"},
+         {tex:'q\\,d(x,y)',say:"q times d of x, y"},
+         {tex:'\\quad\\forall x,y\\in X',say:"for all x and y in X."}]},
+{op:'annotate', style:'circle', target:'d2', glyphs:[4,10], color:'yellow'},
+{op:'say', text:"Everything hinges on q being strictly less than one. Distances don't merely fail to grow — they shrink by a fixed factor every single time you apply T."},
+
+{op:'head', id:'h1', panel:0, text:'Theorem (Banach, 1922)', persist:'pinned', say:"And here's the theorem. Banach, nineteen twenty-two."},
+{op:'write', id:'t1', panel:0, persist:'pinned',
+ chunks:[{tex:'(X,d)\\ \\text{complete},',say:"X with metric d, complete,"},
+         {tex:'\\quad T\\ \\text{a contraction}',say:"and T a contraction."}]},
+{op:'write', id:'t2', panel:0, persist:'pinned',
+ chunks:[{tex:'\\Rightarrow',say:"Then"},
+         {tex:'\\exists!\\,x^*\\in X',say:"there is exactly one x star in X"},
+         {tex:':\\ Tx^*=x^*',say:"with T of x star equal to x star,"}]},
+{op:'write', id:'t3', panel:0, persist:'pinned', cont:true,
+ chunks:[{tex:'\\text{and}\\ T^n x_0\\to x^*',say:"and T to the n applied to x zero converges to x star"},
+         {tex:'\\ \\ \\forall x_0\\in X',say:"for every starting point x zero."}]},
+{op:'annotate', style:'box', target:'t2', color:'yellow'},
+{op:'say', text:"Three claims — existence, uniqueness, and convergence from anywhere. We'll take them in that order."},
+
+/* ---------------- existence ---------------- */
+{op:'head', id:'h2', panel:1, text:'1. Existence', persist:'working', say:"Part one. Existence."},
+{op:'write', id:'e1', panel:1, persist:'working',
+ pre:"The construction is the obvious one — just iterate.",
+ chunks:[{tex:'x_0\\in X\\ \\text{arbitrary},',say:"x zero in X, arbitrary,"},
+         {tex:'\\quad x_{n+1}:=Tx_n',say:"and x n plus one defined to be T of x n."}]},
+{op:'write', id:'e2', panel:1, persist:'working',
+ pre:"So look at the gap between consecutive terms.",
+ chunks:[{tex:'d(x_{n+1},x_n)',say:"d of x n plus one, x n"},
+         {tex:'=',say:"equals"},
+         {tex:'d(Tx_n,Tx_{n-1})',say:"d of T x n, T x n minus one"}]},
+{op:'write', id:'e3', panel:1, persist:'working', cont:true,
+ chunks:[{tex:'\\le',say:"which is at most"},
+         {tex:'q\\,d(x_n,x_{n-1})',say:"q times d of x n, x n minus one."}]},
+{op:'arrow', from:'d3', to:'e3', label:'contraction'},
+{op:'write', id:'e4', panel:1, persist:'working', cont:true,
+ pre:"And now just iterate that bound.",
+ chunks:[{tex:'\\le\\cdots\\le',say:"less than or equal to, dot dot dot, less than or equal to"},
+         {tex:'q^{\\,n}\\,d(x_1,x_0)',say:"q to the n, times d of x one, x zero."}]},
+{op:'annotate', style:'under', target:'e4', color:'yellow'},
+{op:'say', text:"Geometric decay. That's the engine of the entire proof."},
+
+{op:'write', id:'e5', panel:1, persist:'working',
+ pre:"Now take any two indices, m bigger than n.",
+ chunks:[{tex:'\\text{For } m>n:',say:"For m greater than n:"}]},
+{op:'write', id:'e6', panel:1, persist:'working',
+ chunks:[{tex:'d(x_m,x_n)',say:"d of x m, x n"},
+         {tex:'\\le',say:"is at most"},
+         {tex:'\\sum_{k=n}^{m-1}',say:"the sum, from k equals n to m minus one,"},
+         {tex:'d(x_{k+1},x_k)',say:"of d of x k plus one, x k"}],
+ post:"That's just the triangle inequality, telescoped along the chain."},
+{op:'write', id:'e7', panel:1, persist:'working', cont:true,
+ chunks:[{tex:'\\le',say:"at most"},
+         {tex:'\\Big(\\sum_{k=n}^{m-1} q^{\\,k}\\Big)',say:"the sum from k equals n to m minus one of q to the k,"},
+         {tex:'d(x_1,x_0)',say:"times d of x one, x zero."}]},
+{op:'write', id:'s1', panel:1, persist:'ephemeral', scratch:true,
+ pre:"Let me do the series off to the side.",
+ chunks:[{tex:'\\sum_{k\\ge n} q^{\\,k}',say:"sum over k at least n of q to the k"},
+         {tex:'=\\frac{q^{\\,n}}{1-q}',say:"equals q to the n over one minus q."}]},
+{op:'write', id:'e8', panel:1, persist:'working', cont:true, derived:true,
+ prov:'Agent-expanded: the source writes "summing the geometric series". Verified with SymPy.',
+ chunks:[{tex:'\\le',say:"so this is at most"},
+         {tex:'\\dfrac{q^{\\,n}}{1-q}',say:"q to the n over one minus q,"},
+         {tex:'\\,d(x_1,x_0)',say:"times d of x one, x zero."}]},
+{op:'annotate', style:'box', target:'e8', color:'yellow'},
+{op:'point', target:'e8'},
+{op:'say', text:"And notice — the right-hand side doesn't involve m at all. It just goes to zero as n grows."},
+{op:'erase', panel:1, ids:['s1']},
+{op:'write', id:'e9', panel:1, persist:'working',
+ chunks:[{tex:'\\Rightarrow (x_n)\\ \\text{is Cauchy}',say:"So the sequence x n is Cauchy."}]},
+
+{op:'question', text:"Wait — why does that give you Cauchy?", tier:'fast', latency:'1.2s', point:'e8',
+ answer:"Because the bound is uniform in m. Given epsilon, pick n large enough that q to the n over one minus q is below it — and then every later pair of terms is within epsilon. That is precisely the Cauchy condition."},
+
+{op:'write', id:'e10', panel:1, persist:'working',
+ chunks:[{tex:'X\\ \\text{complete}',say:"X is complete,"},
+         {tex:'\\Rightarrow x_n\\to x^*\\in X',say:"so x n converges to some x star in X."}]},
+{op:'annotate', style:'circle', target:'e10', glyphs:[0,8], color:'blue'},
+{op:'say', text:"And that is the only place completeness gets used in the entire argument. Hold onto that — someone always asks."},
+{op:'write', id:'e11', panel:1, persist:'working',
+ chunks:[{tex:'T\\ \\text{contraction}',say:"T is a contraction,"},
+         {tex:'\\Rightarrow T\\ \\text{continuous}',say:"so T is continuous — Lipschitz, in fact."}]},
+{op:'write', id:'e12', panel:1, persist:'working', derived:true,
+ prov:'Agent-expanded: source says "passing to the limit". Continuity of T justifies the exchange.',
+ pre:"So we can pass T through the limit.",
+ chunks:[{tex:'Tx^*',say:"T of x star"},
+         {tex:'=T(\\lim x_n)',say:"equals T of the limit of x n"},
+         {tex:'=\\lim x_{n+1}',say:"equals the limit of x n plus one"},
+         {tex:'=x^*',say:"equals x star."}],
+ post:"There it is. The limit is a fixed point."},
+{op:'annotate', style:'box', target:'e12', color:'yellow'},
+
+/* ---------------- uniqueness ---------------- */
+{op:'head', id:'h3', panel:2, text:'2. Uniqueness', persist:'working', say:"Part two. Uniqueness — and this one is two lines."},
+{op:'write', id:'u1', panel:2, persist:'working',
+ chunks:[{tex:'\\text{Suppose } Tx=x,',say:"Suppose T x equals x,"},
+         {tex:'\\ Ty=y',say:"and T y equals y."}]},
+{op:'write', id:'u2', panel:2, persist:'working',
+ chunks:[{tex:'d(x,y)',say:"Then d of x, y"},
+         {tex:'=d(Tx,Ty)',say:"equals d of T x, T y"},
+         {tex:'\\le q\\,d(x,y)',say:"which is at most q times d of x, y."}]},
+{op:'write', id:'u3', panel:2, persist:'working',
+ chunks:[{tex:'\\Rightarrow',say:"So"},
+         {tex:'(1-q)\\,d(x,y)\\le 0',say:"one minus q, times d of x y, is at most zero."}]},
+{op:'write', id:'u4', panel:2, persist:'working', cont:true,
+ chunks:[{tex:'1-q>0',say:"But one minus q is strictly positive,"},
+         {tex:'\\Rightarrow d(x,y)=0',say:"so d of x, y has to be zero,"}]},
+{op:'write', id:'u5', panel:2, persist:'working', cont:true,
+ chunks:[{tex:'\\Rightarrow x=y',say:"hence x equals y."},
+         {tex:'\\qquad\\blacksquare',say:"Done."}]},
+{op:'annotate', style:'box', target:'u5', color:'yellow'},
+
+{op:'question', text:"What breaks if X isn't complete?", tier:'deep', latency:'18s', point:'e10',
+ think:[{tex:'X=(0,1],\\ Tx=\\tfrac{x}{2}', say:"X the half-open interval, T x equals x over two"},
+        {tex:'|Tx-Ty|=\\tfrac12|x-y|\\ \\checkmark', say:"still a contraction, q equals one half"},
+        {tex:'x_n=2^{-n}\\to 0\\notin X', say:"but the iterates run to zero, which isn't in X"}],
+ answer:"Good question. Everything else survives — take X to be the half-open interval from zero to one, and T x equal to x over two. Still a contraction with q one half. But the iterates march down toward zero, and zero isn't in the space. So you get a Cauchy sequence with nowhere to converge, and no fixed point. Completeness is doing exactly one job, and that's it."},
+
+/* ---------------- rate ---------------- */
+{op:'say', text:"Let me clear the middle board. The statement stays up on the left."},
+{op:'erase', panel:1},
+{op:'head', id:'h4', panel:1, text:'3. Rate of convergence', persist:'working', say:"Part three, and this is the part that makes the theorem useful."},
+{op:'write', id:'r1', panel:1, persist:'working',
+ chunks:[{tex:'\\text{Let } m\\to\\infty',say:"Let m go to infinity"},
+         {tex:'\\text{ in the bound above:}',say:"in the bound we had."}]},
+{op:'write', id:'r2', panel:1, persist:'working',
+ chunks:[{tex:'d(x_n,x^*)',say:"d of x n, x star"},
+         {tex:'\\le',say:"is at most"},
+         {tex:'\\dfrac{q^{\\,n}}{1-q}',say:"q to the n over one minus q,"},
+         {tex:'\\,d(x_1,x_0)',say:"times d of x one, x zero."}]},
+{op:'annotate', style:'box', target:'r2', color:'yellow'},
+{op:'point', target:'r2'},
+{op:'say', text:"Geometric convergence, with a rate you can compute from a single step. That's why this is a working tool and not just an abstraction."},
+{op:'arrow', from:'t3', to:'r2', label:'quantifies'},
+{op:'say', text:"Everything on the left board is verbatim from the source. The two lines with yellow ticks in the middle are mine — expansions of steps the text skipped over. Questions?"}
+];
+
+/* ============================================================================ */
+const $=s=>document.querySelector(s);
+const board=$('#board'), overlay=$('#overlay'), hand=$('#hand'),
+      cap=$('#cap'), badge=$('#badge'), prog=$('#prog i'), prof=$('#prof');
+const panels=[...document.querySelectorAll('.panel')];
+const items=new Map(); const annos=[];
+let state={playing:false, speed:1, idx:0, run:0, qa:false};
+const sleep=ms=>new Promise(r=>setTimeout(r, ms/state.speed));
+async function gate(){ while(!state.playing || state.qa) await new Promise(r=>setTimeout(r,60)); }
+function setState(s){ document.body.dataset.state=s; }
+
+/* ---------- character animation ---------- */
+const MOUTHS=['M88 93 C94 98 106 98 112 93',        // closed smile
+              'M89 92 C94 103 106 103 111 92',      // open
+              'M90 93 C95 99 105 99 110 93',        // small
+              'M88 91 C94 106 106 106 112 91'];     // wide
+let mouthTimer=null;
+function talking(on){
+  const m=$('#mouth');
+  if(on){ if(mouthTimer) return;
+    mouthTimer=setInterval(()=>m.setAttribute('d', MOUTHS[1+Math.floor(Math.random()*3)]), 115);
+  } else { clearInterval(mouthTimer); mouthTimer=null; m.setAttribute('d', MOUTHS[0]); }
+}
+setInterval(()=>{                                   // blinking
+  const l=$('#eyeL'), r=$('#eyeR');
+  l.classList.add('blink'); r.classList.add('blink');
+  setTimeout(()=>{l.classList.remove('blink');r.classList.remove('blink');},110);
+}, 3200+Math.random()*2600);
+
+/* ---------- staging: keep the professor out of his own way ----------
+   A lecturer never stands in front of the thing he is writing. He steps
+   aside. So: score every standing position along the foot of the board by
+   how much board content it covers (pinned content weighted heaviest, the
+   line being written heavier still), minus a pull toward the active line so
+   he still looks connected to it. Walk to the best one.                    */
+const PROF_W=185, PROF_H=270;
+let profX=0;
+const overlap=(a,b)=>{
+  const w=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x);
+  const h=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);
+  return (w>0&&h>0)?w*h:0;
+};
+function boardRects(){
+  const b=board.getBoundingClientRect();
+  return [...document.querySelectorAll('.item')].map(el=>{
+    const r=el.getBoundingClientRect();
+    return {x:r.left-b.left, y:r.top-b.top, w:r.width, h:r.height,
+            wt: el.dataset.persist==='pinned'?3:1};
+  }).filter(r=>r.w>1&&r.h>1);
+}
+function placeProf(activeEl){
+  const b=board.getBoundingClientRect();
+  if(!b.width) return;
+  const py=b.height-PROF_H, rects=boardRects();
+  let actR=null;
+  if(activeEl){ const r=activeEl.getBoundingClientRect();
+    actR={x:r.left-b.left, y:r.top-b.top, w:r.width, h:r.height}; }
+
+  const N=11, span=Math.max(0,b.width-PROF_W);
+  let best=0, bestScore=Infinity;
+  for(let i=0;i<N;i++){
+    const x=Math.round(i*span/(N-1));
+    const box={x, y:py, w:PROF_W, h:PROF_H};
+    let s=0;
+    for(const r of rects) s+=overlap(box,r)*r.wt;
+    if(actR){
+      s+=overlap(box,actR)*10;                       // never cover the live line
+      s+=Math.abs((x+PROF_W/2)-(actR.x+actR.w/2))*0.30;   // but stay near it
+    }
+    if(s<bestScore){ bestScore=s; best=x; }
+  }
+  profX=best;
+  prof.style.transform=`translateX(${best}px)`;
+  const box={x:best,y:py,w:PROF_W,h:PROF_H};
+  prof.classList.toggle('duck', rects.reduce((a,r)=>a+overlap(box,r),0) > 2600);
+}
+
+function aimArm(el){                                 // point the writing arm at the active line
+  const arm=$('#armR'); if(!el){arm.style.transform='';return;}
+  const b=board.getBoundingClientRect(), r=el.getBoundingClientRect();
+  const sx=profX+PROF_W*0.63, sy=(b.height-PROF_H)+PROF_H*0.44;   // shoulder, in board coords
+  const dx=(r.left-b.left+r.width*0.4)-sx, dy=(r.top-b.top+r.height/2)-sy;
+  const ang=Math.atan2(dy,dx)*180/Math.PI;           // arm rests at ~+55deg
+  arm.style.transform=`rotate(${Math.max(-105,Math.min(10, ang-55)).toFixed(1)}deg)`;
+}
+
+/* ---------- glyphs ---------- */
+const GLYPH_RULE=n=>n.classList&&(n.classList.contains('frac-line')||n.classList.contains('rule')||
+  n.classList.contains('overline-line')||n.classList.contains('underline-line'));
+const isSpace=c=>c===' '||c===' '||c==='​';
+
+function splitGlyphs(host){
+  const html=host.querySelector('.katex-html')||host, out=[];
+  const w=document.createTreeWalker(html,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);
+  const nodes=[]; while(w.nextNode()) nodes.push(w.currentNode);
+  for(const n of nodes){
+    if(n.nodeType===3){
+      const chars=[...n.nodeValue]; if(!chars.length) continue;
+      const frag=document.createDocumentFragment();
+      for(const c of chars){
+        if(isSpace(c)){ frag.appendChild(document.createTextNode(c)); continue; }
+        const s=document.createElement('span'); s.className='glyph'; s.textContent=c;
+        s.style.setProperty('--rot',((Math.random()*2-1)*2.0).toFixed(2)+'deg');
+        s.style.setProperty('--dy',((Math.random()*2-1)*0.9).toFixed(2)+'px');
+        frag.appendChild(s); out.push(s);
+      }
+      n.parentNode.replaceChild(frag,n);
+    } else if(GLYPH_RULE(n)){ n.classList.add('glyph'); out.push(n); }
+  }
+  return out;
+}
+function splitText(el,str){
+  const out=[];
+  for(const c of str){
+    if(c===' '){ el.appendChild(document.createTextNode(' ')); continue; }
+    const s=document.createElement('span'); s.className='glyph'; s.textContent=c;
+    s.style.setProperty('--rot',((Math.random()*2-1)*2.4).toFixed(2)+'deg');
+    s.style.setProperty('--dy',((Math.random()*2-1)*1.1).toFixed(2)+'px');
+    el.appendChild(s); out.push(s);
+  }
+  return out;
+}
+const _gc=new Map();
+function countGlyphs(tex){
+  if(_gc.has(tex)) return _gc.get(tex);
+  const probe=document.createElement('span');
+  probe.style.cssText='position:absolute;left:-9999px;top:0;visibility:hidden';
+  document.body.appendChild(probe);
+  try{ katex.render(tex,probe,{throwOnError:false}); }catch(e){}
+  const html=probe.querySelector('.katex-html')||probe; let n=0;
+  const w=document.createTreeWalker(html,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);
+  while(w.nextNode()){
+    const nd=w.currentNode;
+    if(nd.nodeType===3){ for(const c of nd.nodeValue) if(!isSpace(c)) n++; }
+    else if(GLYPH_RULE(nd)) n++;
+  }
+  probe.remove(); _gc.set(tex,n); return n;
+}
+function chunkRanges(chunks, total){
+  const counts=chunks.map(c=>countGlyphs(c.tex));
+  const sum=counts.reduce((a,b)=>a+b,0), out=[]; let p=0;
+  if(sum===total){ counts.forEach(n=>{out.push([p,p+n]);p+=n;}); return out; }
+  counts.forEach((n,i)=>{                              // proportional fallback
+    const take=i===counts.length-1 ? total-p : Math.round(n/Math.max(sum,1)*total);
+    out.push([p,p+take]); p+=take;
+  });
+  return out;
+}
+function autofit(item){
+  const fit=item.querySelector('.fit'); fit.style.transform='none';
+  const avail=item.clientWidth, need=fit.scrollWidth;
+  if(need>avail && avail>0) fit.style.transform=`scale(${(avail/need*0.985).toFixed(3)})`;
+}
+
+/* ---------- speech ---------- */
+let VOICE=null;
+function loadVoices(){
+  const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  if(!vs.length) return;
+  /* Edge/Windows "Online (Natural)" voices are neural and the best available anywhere;
+     macOS "Premium"/"Enhanced" next; then Chrome's bundled Google voices. */
+  const score=v=>(/natural|online/i.test(v.name)?120:0)
+                +(/premium|enhanced/i.test(v.name)?100:0)
+                +(/^Google /i.test(v.name)?45:0)
+                +(/en-US|en-GB/i.test(v.lang)?20:0)
+                +(/(Ava|Zoe|Evan|Serena|Samantha|Alex|Daniel|Aria|Guy|Jenny|Ryan|Sonia)/i.test(v.name)?10:0);
+  const nice=v=>v.name.replace(/^Microsoft\s+/,'').replace(/\s*-\s*English.*$/i,'')
+                      .replace(/\s*\((Natural|Premium|Enhanced)\)/i,'').trim();
+  vs.sort((a,b)=>score(b)-score(a));
+  const sel=$('#voicePick'); sel.innerHTML='';
+  vs.forEach(v=>{ const o=document.createElement('option');
+    o.value=v.name; o.textContent=nice(v)+(/natural|online|premium|enhanced/i.test(v.name)?' ★':'');
+    sel.appendChild(o); });
+  VOICE=vs[0]; sel.value=VOICE.name;
+  sel.onchange=()=>{ VOICE=vs.find(v=>v.name===sel.value); };
+}
+if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+
+const WPS=2.35;                                        // spoken math is slow
+const estimate=t=>Math.max(650, t.trim().split(/\s+/).length/WPS*1000);
+
+/* TTS provider seam. Swap this for pre-rendered audio or an API and everything
+   above keeps working unchanged. */
+function speak(text, opts={}){
+  return new Promise(res=>{
+    if(!$('#voiceOn').checked || !('speechSynthesis' in window))
+      return setTimeout(res, estimate(text)/state.speed);
+    const u=new SpeechSynthesisUtterance(text);
+    if(VOICE) u.voice=VOICE;
+    u.rate=Math.min(2.2, (opts.rate||0.92)*state.speed);
+    u.pitch=opts.pitch||0.92;
+    let done=false; const fin=()=>{ if(done) return; done=true; talking(false); res(); };
+    u.onstart=()=>talking(true); u.onend=fin; u.onerror=fin;
+    setTimeout(fin, estimate(text)*2.6/state.speed);   // safety net
+    speechSynthesis.speak(u);
+  });
+}
+function showCap(text, cls){ cap.className=cls||''; cap.textContent=text; }
+
+/* ---------- write: speak-while-writing ---------- */
+async function revealRange(glyphs,[a,b],budget){
+  const seg=glyphs.slice(a,b);
+  if(!seg.length){ await sleep(budget); return; }
+  const writeMs=Math.min(budget*0.88, seg.length*88);
+  const step=writeMs/seg.length;
+  for(const g of seg){ g.classList.add('inked'); await sleep(step); }
+  await sleep(Math.max(0, budget-writeMs));
+}
+async function doWrite(op){
+  const panel=panels[op.panel];
+  const item=document.createElement('div');
+  item.className='item'+(op.op==='head'?' head':'')+(op.cont?' cont':'')+(op.scratch?' scratch':'');
+  item.dataset.id=op.id||''; item.dataset.persist=op.persist||'working';
+  const fit=document.createElement('div'); fit.className='fit';
+  item.appendChild(fit); panel.appendChild(item);
+
+  let glyphs, ranges, chunks;
+  if(op.op==='head'){
+    glyphs=splitText(fit, op.text);
+    chunks=[{tex:null, say:op.say||op.text}]; ranges=[[0,glyphs.length]];
+  } else {
+    chunks=op.chunks;
+    const host=document.createElement('span'); fit.appendChild(host);
+    try{ katex.render(chunks.map(c=>c.tex).join(' '), host, {throwOnError:false, displayMode:false}); }
+    catch(e){ host.textContent=chunks.map(c=>c.tex).join(' '); }
+    glyphs=splitGlyphs(host);
+    ranges=chunkRanges(chunks, glyphs.length);
+  }
+  if(op.derived){ const p=document.createElement('span'); p.className='prov';
+    p.title=op.prov||'Agent-derived step'; item.appendChild(p); }
+  autofit(item);
+  if(op.id) items.set(op.id,{el:item, glyphs});
+
+  if(op.pre){ await gate(); setState('idle'); aimArm(null); placeProf(null);
+              showCap(op.pre); await speak(op.pre); await sleep(120); }
+
+  placeProf(item);                                     // step clear of the line before writing it
+  if(!op.cont) await sleep(280);                       // give him time to walk
+
+  for(let k=0;k<chunks.length;k++){
+    await gate();                                      // barge-in lands here
+    setState('writing'); aimArm(item);
+    showCap(chunks[k].say);
+    const budget=estimate(chunks[k].say);
+    const spoken=speak(chunks[k].say);
+    await revealRange(glyphs, ranges[k], budget);
+    await spoken;
+    await sleep(90);                                   // beat between phrases
+  }
+  item.classList.add('done');
+  if($('#chalkTx').checked) item.classList.add('chalked');
+  setState('idle'); aimArm(null);
+  if(!op.scratch && op.id) history.push({id:op.id, said:chunks.map(c=>c.say).join(' ')});
+  if(op.post){ await gate(); showCap(op.post); await speak(op.post); }
+  await sleep(180);
+}
+
+/* ---------- annotations ---------- */
+function rectOf(id,range){
+  const rec=items.get(id); if(!rec) return null;
+  const b=board.getBoundingClientRect(); let r;
+  if(range && rec.glyphs.length){
+    const sel=rec.glyphs.slice(range[0], Math.min(range[1]+1, rec.glyphs.length));
+    if(!sel.length) return null;
+    let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
+    sel.forEach(g=>{const q=g.getBoundingClientRect();
+      x1=Math.min(x1,q.left);y1=Math.min(y1,q.top);x2=Math.max(x2,q.right);y2=Math.max(y2,q.bottom);});
+    r={left:x1,top:y1,width:x2-x1,height:y2-y1};
+  } else r=rec.el.getBoundingClientRect();
+  return {x:r.left-b.left, y:r.top-b.top, w:r.width, h:r.height};
+}
+const COL={yellow:'#f2d98a', blue:'#a8cbe0', white:'#e9e5d8'};
+const svgEl=(t,a)=>{const e=document.createElementNS('http://www.w3.org/2000/svg',t);
+  for(const k in a) e.setAttribute(k,a[k]); return e;};
+
+function doAnnotate(op,replay){
+  const r=rectOf(op.target,op.glyphs); if(!r) return;
+  const c=COL[op.color||'yellow'], pad=5; let el,len;
+  if(op.style==='box'){
+    const x=r.x-pad,y=r.y-pad-1,w=r.w+pad*2,h=r.h+pad*2, wob=()=>(Math.random()*2-1)*1.8;
+    el=svgEl('path',{d:`M${x+wob()},${y+wob()} L${x+w+wob()},${y+wob()} L${x+w+wob()},${y+h+wob()} L${x+wob()},${y+h+wob()} Z`,
+      stroke:c,'stroke-width':1.7}); len=2*(w+h)+20;
+  } else if(op.style==='circle'){
+    const cx=r.x+r.w/2, cy=r.y+r.h/2, rx=r.w/2+7, ry=r.h/2+5;
+    el=svgEl('path',{d:`M${cx+rx},${cy} a${rx},${ry} 0 1,1 -0.6,-${ry*0.12} a${rx*1.02},${ry*1.03} 0 1,0 1.4,${ry*0.1}`,
+      stroke:c,'stroke-width':1.6}); len=2*Math.PI*Math.max(rx,ry)+30;
+  } else {
+    const y=r.y+r.h+3;
+    el=svgEl('path',{d:`M${r.x},${y} Q${r.x+r.w*.5},${y+3.2} ${r.x+r.w},${y-.8}`,stroke:c,'stroke-width':1.9});
+    len=r.w+18;
+  }
+  el.style.setProperty('--len',len); el.style.setProperty('--dur',(replay?1:560)+'ms');
+  overlay.appendChild(el); if(!replay) annos.push(op);
+}
+function doArrow(op,replay){
+  const a=rectOf(op.from), b=rectOf(op.to); if(!a||!b) return;
+  const x1=a.x+a.w, y1=a.y+a.h/2, x2=b.x-6, y2=b.y+b.h/2;
+  const mx=(x1+x2)/2, my=(y1+y2)/2-Math.abs(x2-x1)*.13-14;
+  const el=svgEl('path',{d:`M${x1+6},${y1} Q${mx},${my} ${x2},${y2}`,stroke:'#f2d98a',
+    'stroke-width':1.5,'marker-end':'url(#arrowhead)',opacity:.8});
+  el.style.setProperty('--len',Math.hypot(x2-x1,y2-y1)*1.4+40);
+  el.style.setProperty('--dur',(replay?1:700)+'ms');
+  overlay.appendChild(el);
+  if(op.label){ const t=svgEl('text',{x:mx,y:my-4,'text-anchor':'middle'}); t.textContent=op.label; overlay.appendChild(t); }
+  if(!replay) annos.push(op);
+}
+function redrawAnnos(){ overlay.innerHTML=''; annos.forEach(o=>o.op==='arrow'?doArrow(o,true):doAnnotate(o,true)); }
+let rt; addEventListener('resize',()=>{clearTimeout(rt);
+  rt=setTimeout(()=>{items.forEach(v=>autofit(v.el));redrawAnnos();placeProf(null);},180);});
+
+async function doPoint(op){
+  const r=rectOf(op.target,op.glyphs); if(!r) return;
+  placeProf(items.get(op.target).el); await sleep(240);   // step beside it, not in front of it
+  setState('pointing'); aimArm(items.get(op.target).el);
+  hand.classList.add('show');
+  hand.style.transform=`translate(${r.x+r.w+6}px, ${r.y+r.h/2-8}px)`;
+  await sleep(op.hold||1400);
+  setState('idle');
+}
+const hideHand=()=>{ hand.classList.remove('show'); aimArm(null); };
+
+async function doErase(op){
+  const panel=panels[op.panel];
+  const targets=[...panel.querySelectorAll('.item')].filter(el=>
+    op.ids ? op.ids.includes(el.dataset.id) : el.dataset.persist!=='pinned');
+  if(!targets.length) return;
+  setState('writing');
+  const band=document.createElement('div'); band.className='eraser'; band.style.top='-46px';
+  panel.appendChild(band);
+  const ph=panel.clientHeight, dur=900;
+  band.animate([{transform:'translateY(0)'},{transform:`translateY(${ph+60}px)`}],
+    {duration:dur/state.speed, easing:'ease-in-out'});
+  targets.forEach(el=>{
+    const rel=el.offsetTop/Math.max(ph,1);
+    setTimeout(()=>{ el.style.height=el.offsetHeight+'px'; el.classList.add('wiped');
+      requestAnimationFrame(()=>{el.style.height='0px';el.style.margin='0';}); },(rel*dur*.8+90)/state.speed);
+  });
+  await sleep(dur+300); band.remove();
+  targets.forEach(el=>{ items.delete(el.dataset.id); el.remove(); });
+  for(let i=0;i<3;i++){ const s=document.createElement('div'); s.className='smudge';
+    s.style.cssText+=`left:${10+Math.random()*55}%;top:${10+Math.random()*60}%;width:${70+Math.random()*90}px;height:${26+Math.random()*30}px;`;
+    panel.appendChild(s); }
+  for(let i=annos.length-1;i>=0;i--){
+    const o=annos[i];
+    if([o.target,o.from,o.to].filter(Boolean).some(id=>!items.has(id))) annos.splice(i,1);
+  }
+  redrawAnnos(); setState('idle'); placeProf(null);
+}
+
+async function doSay(op){
+  setState('idle'); hideHand(); placeProf(null);        // drift to the clearest spot while talking
+  showCap(op.text); badge.className='on'; badge.textContent='lecturing';
+  await speak(op.text); await sleep(200);
+}
+
+async function doQuestion(op){
+  hideHand();
+  showCap('“'+op.text+'”','student');
+  badge.className='on student'; badge.textContent='student · interrupt';
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+  talking(false); setState('listening');
+  await sleep(1700);
+
+  if(op.tier==='deep'){
+    setState('thinking'); badge.className='on deep';
+    badge.textContent='deep tier · thinking '+op.latency;
+    showCap('…');
+    for(let i=0;i<op.think.length;i++){
+      await doWrite({op:'write', id:'__th'+i, panel:2, persist:'ephemeral', scratch:true,
+                     chunks:[{tex:op.think[i].tex, say:op.think[i].say}]});
+      setState('thinking'); await sleep(400);
+    }
+    await sleep(600);
+  } else {
+    badge.className='on'; badge.textContent=op.tier+' tier · '+op.latency;
+    await sleep(900);
+  }
+  if(op.point) await doPoint({target:op.point, hold:900});
+  showCap(op.answer); badge.className='on'; badge.textContent='answering';
+  await speak(op.answer);
+  if(op.tier==='deep'){ await sleep(400); await doErase({panel:2, ids:op.think.map((_,i)=>'__th'+i)}); }
+  hideHand(); setState('idle'); await sleep(250);
+}
+
+/* ---------- main loop ---------- */
+async function play(){
+  const myRun=++state.run;
+  while(state.idx<SCRIPT.length){
+    await gate(); if(myRun!==state.run) return;
+    const op=SCRIPT[state.idx];
+    try{
+      if(op.op==='say') await doSay(op);
+      else if(op.op==='write'||op.op==='head') await doWrite(op);
+      else if(op.op==='annotate'){ doAnnotate(op); await sleep(650); }
+      else if(op.op==='arrow'){ doArrow(op); await sleep(800); }
+      else if(op.op==='point') await doPoint(op);
+      else if(op.op==='erase') await doErase(op);
+      else if(op.op==='question') await doQuestion(op);
+    }catch(e){ console.warn('op failed',op,e); }
+    if(myRun!==state.run) return;
+    state.idx++; prog.style.width=(state.idx/SCRIPT.length*100)+'%';
+  }
+  state.playing=false; $('#play').textContent='▶ Play';
+  badge.className='on'; badge.textContent='end';
+  showCap('Lecture complete. 3 boards, '+SCRIPT.length+' ops, 2 flagged as agent-derived.');
+  setState('idle'); hideHand(); talking(false);
+}
+
+/* ---------- controls ---------- */
+$('#play').onclick=()=>{
+  state.playing=!state.playing;
+  $('#play').textContent=state.playing?'❚❚ Pause':'▶ Play';
+  if('speechSynthesis' in window){ state.playing?speechSynthesis.resume():speechSynthesis.pause(); }
+  if(!state.playing) talking(false);
+  if(state.playing && state.idx===0) play();
+};
+$('#restart').onclick=()=>{
+  state.run++; state.playing=false; state.idx=0;
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+  talking(false);
+  panels.forEach(p=>[...p.children].forEach(c=>{ if(!c.classList.contains('panel-tag')) c.remove(); }));
+  overlay.innerHTML=''; items.clear(); annos.length=0; history.length=0;
+  hideHand(); setState('idle'); prog.style.width='0';
+  prof.classList.remove('duck'); profX=0; prof.style.transform='translateX(0)';
+  $('#play').textContent='▶ Play'; badge.className='';
+  showCap('Press Play — Banach fixed-point theorem, ~9 minutes.');
+};
+$('#speed').onchange=e=>state.speed=parseFloat(e.target.value);
+$('#chalkTx').onchange=e=>document.body.classList.toggle('nochalk', !e.target.checked);
+/* ============================================================================
+   INTERACTION — ask the lecturer a question, by voice or text.
+
+   This is a faithful mock of the three-tier router in the plan. The reflex and
+   fast tiers use NO model: they retrieve from a hand-authored knowledge base
+   that stands in for the semantic graph the compiler would emit. That is the
+   point — it demonstrates that most real lecture questions are answerable from
+   structure alone, in single-digit milliseconds. Only unmatched questions
+   escalate to the deep tier.
+   ============================================================================ */
+
+/* --- notation table → reflex tier (this is what §3.2 of the plan builds) --- */
+const NOTATION={
+ 'q':{ref:'d3', say:"q is the contraction constant — the fixed factor by which T shrinks every distance. The whole theorem lives or dies on q being strictly less than one."},
+ 't':{ref:'d1', say:"T is the map from X to itself that we're iterating. The contraction."},
+ 'x star':{ref:'t2', say:"x star is the fixed point — the limit of the iterates, and the unique solution of T x equals x."},
+ 'd':{ref:'t1', say:"d is the metric on X. d of a, b is just the distance between a and b."},
+ 'x n':{ref:'e1', say:"x n is the n-th iterate. Start anywhere at x zero, apply T n times."},
+ 'x':{ref:'t1', say:"Capital X is the underlying metric space, which we assume is complete."},
+ 'cauchy':{ref:'e9', say:"A sequence is Cauchy if its terms eventually get arbitrarily close to each other — no limit required, just mutual closeness."},
+ 'complete':{ref:'e10', say:"Complete means every Cauchy sequence in the space actually converges to a point of the space. No holes."},
+ 'contraction':{ref:'d1', say:"A contraction is a map that shrinks all distances by at least a fixed factor q, strictly below one."},
+ 'fixed point':{ref:'t2', say:"A fixed point is a point T doesn't move — T x equals x."}
+};
+
+/* --- fact base → fast tier --- */
+const FACTS=[
+ {topic:"why the sequence is Cauchy", keys:['cauchy'], point:'e8',
+  say:"Because the bound is uniform in m — it doesn't involve m at all. Given epsilon, pick n large enough that q to the n over one minus q falls below it, and then every later pair of terms is within epsilon. That's exactly the Cauchy condition."},
+
+ {topic:"what completeness is doing", keys:['complete','completeness','incomplete','not complete','hole'], point:'e10',
+  scratch:[{tex:'X=(0,1],\\ Tx=\\tfrac{x}{2}', say:"X the half-open interval, T x equals x over two"},
+           {tex:'x_n=2^{-n}\\to 0\\notin X', say:"iterates run to zero, which isn't in X"}],
+  say:"Completeness does exactly one job, and only one: it turns the Cauchy sequence into an actual limit inside X. Drop it and everything else survives — take X the half-open interval from zero to one and T x equal to x over two. Still a contraction with q one half, but the iterates march down to zero, which isn't in the space. Cauchy with nowhere to land."},
+
+ {topic:"why T is continuous", keys:['continuous','continuity','lipschitz'], point:'e11',
+  say:"A contraction is Lipschitz with constant q, and Lipschitz implies continuous. That's what lets us pull T inside the limit."},
+
+ {topic:"why q must be strictly less than one", keys:['q less than','less than one','strictly less','q equals one','q equal one','q is one','nonexpansive','non expansive'], point:'d3',
+  scratch:[{tex:'T:\\mathbb{R}\\to\\mathbb{R},\\ Tx=x+1', say:"T on the real line, x maps to x plus one"}],
+  say:"With q equal to one you lose everything. Take translation on the real line — x maps to x plus one. Distances are preserved exactly, so q equals one, the space is complete, and there is no fixed point at all. You need strict contraction, not just non-expansiveness."},
+
+ {topic:"where the geometric series came from", keys:['geometric','series','the sum','summing','where did that'], point:'e8',
+  say:"The sum from k equals n to m minus one of q to the k is bounded by the full tail, sum over all k at least n. That's q to the n times one over one minus q. Standard geometric series, and it converges precisely because q is below one."},
+
+ {topic:"why the bound doesn't involve m", keys:['depend on m','independent of m','uniform','involve m'], point:'e8',
+  say:"Because we bounded the partial sum by the infinite tail. Once you do that, m disappears from the right-hand side, and that uniformity is what upgrades the estimate into the Cauchy property."},
+
+ {topic:"whether the starting point matters", keys:['starting point','x zero','initial point','where you start','any point'], point:'t3',
+  say:"It doesn't matter at all. Every starting point produces a sequence converging to the same x star — uniqueness forces it. Only the speed depends on where you start, through the d of x one, x zero factor."},
+
+ {topic:"the rate of convergence", keys:['rate','how fast','how quickly','speed of convergence','error bound'], point:'r2',
+  say:"Geometric. d of x n, x star is at most q to the n over one minus q, times d of x one, x zero. You get a computable error bound from a single step, which is why this is a practical tool and not just an existence statement."},
+
+ {topic:"uniqueness", keys:['unique','uniqueness','only one','two fixed points','more than one'], point:'u5',
+  say:"If x and y are both fixed, then d of x y equals d of T x, T y, which is at most q times d of x y. So one minus q times d of x y is at most zero. But one minus q is positive, so the distance is zero and x equals y."},
+
+ {topic:"what the theorem is used for", keys:['used for','useful','application','applications','why care','differential','ode','picard'],
+  say:"The big one is Picard–Lindelöf: existence and uniqueness for ordinary differential equations. You rewrite the ODE as an integral equation, show the integral operator is a contraction on a suitable function space, and the fixed point is your solution. It's also behind Newton's method convergence and a great deal of numerical analysis."},
+
+ {topic:"Banach himself", keys:['who was banach','stefan banach','who was','who proved','history','when was this'],
+  say:"Stefan Banach, Polish mathematician, one of the founders of functional analysis. This result is from his nineteen twenty-two doctoral thesis. It's probably the most-used theorem he proved, which is saying something."},
+
+ {topic:"whether the converse holds", keys:['converse','other direction','only if','opposite'],
+  say:"Not as stated — a map can have a unique fixed point without being a contraction. There are partial converses, though. Bessaga's theorem says that if T to the n has a unique fixed point for every n, you can build a metric making T a contraction."},
+
+ {topic:"finite versus infinite dimensions", keys:['finite','dimension','euclidean','r n','infinite dimensional'],
+  say:"Nothing here uses dimension or linear structure at all. It's a pure metric space argument, which is exactly why it works in infinite-dimensional function spaces — and that's where it earns its keep."}
+];
+
+const COMMANDS=[
+ {cmd:'repeat', keys:['repeat','say that again','again please','once more','didnt catch','did not catch']},
+ {cmd:'back',   keys:['go back','previous line','back up','last line','step back']},
+ {cmd:'slower', keys:['slower','slow down','too fast']},
+ {cmd:'faster', keys:['faster','speed up','too slow']},
+ {cmd:'pause',  keys:['pause','hold on','wait a moment','stop for a second']},
+ {cmd:'resume', keys:['continue','carry on','go on','keep going','resume']},
+ {cmd:'restart',keys:['start over','from the beginning','restart']}
+];
+
+const history=[];                                     // written lines, for repeat / go back
+const norm=s=>' '+s.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim()+' ';
+const hit=(t,k)=>t.includes(' '+k+' ');            // whole-token only: bare "t" must not match "the"
+
+function matchCommand(q){ const t=norm(q);
+  for(const c of COMMANDS) if(c.keys.some(k=>hit(t,k))) return c.cmd; return null; }
+function matchFact(q){ const t=norm(q); let best=null,bs=0;
+  for(const f of FACTS){ let s=0;
+    for(const k of f.keys) if(hit(t,k)) s+=k.split(' ').length;
+    if(s>bs){bs=s;best=f;} }
+  return bs>=1?best:null; }
+function matchNotation(q){ const t=norm(q); let best=null,bl=0;
+  for(const k in NOTATION) if(hit(t,k) && k.length>bl){ best=k; bl=k.length; }
+  return best?{key:best,...NOTATION[best]}:null; }
+/* "what is q?" wants the notation table; "what breaks if X isn't complete?" wants the
+   fact base. Definitional phrasing decides which gets first refusal. */
+const isDefinitional=q=>{ const t=norm(q);
+  return /\b(what is|what s|whats|what does|what do|what are|remind me|meaning of|define|stands for)\b/.test(t)
+         && t.trim().split(' ').length<=7; };
+function route(q){
+  const c=matchCommand(q); if(c) return {tier:'cmd', cmd:c};
+  if(isDefinitional(q)){ const n=matchNotation(q); if(n) return {tier:'notation', n}; }
+  const f=matchFact(q);  if(f) return {tier:'fact', f};
+  const n=matchNotation(q); if(n) return {tier:'notation', n};
+  return {tier:'deep'};
+}
+
+/* --- optional deep tier: local Ollama, no API key. Auto-detected on load. --- */
+const LLM={ok:false, url:'http://localhost:11434', model:null};
+async function probeLLM(){
+  try{
+    const c=new AbortController(); setTimeout(()=>c.abort(),1200);
+    const r=await fetch(LLM.url+'/api/tags',{signal:c.signal});
+    const j=await r.json();
+    if(j.models&&j.models.length){ LLM.ok=true; LLM.model=j.models[0].name; }
+  }catch(e){}
+}
+async function askLLM(q){
+  const sys="You are a mathematics professor mid-lecture, at the blackboard, teaching the Banach fixed-point theorem to first-year graduate students. A student just asked a question. Answer in two to four spoken sentences. Plain speech only: no LaTeX, no markdown, no symbols — every formula must be written out in words as you would say it aloud. If you are unsure, say so.";
+  const c=new AbortController(); setTimeout(()=>c.abort(),60000);
+  const r=await fetch(LLM.url+'/api/chat',{method:'POST',signal:c.signal,
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:LLM.model,stream:false,
+      messages:[{role:'system',content:sys},{role:'user',content:q}]})});
+  const j=await r.json();
+  return (j.message&&j.message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();
+}
+
+/* --- the router --- */
+function bargeIn(){ if('speechSynthesis' in window) speechSynthesis.cancel(); talking(false); }
+
+async function answerWith(text, point, scratch, label, ms){
+  badge.className='on'; badge.textContent=label+' · '+ms+'ms';
+  if(scratch){
+    setState('thinking');
+    for(let i=0;i<scratch.length;i++)
+      await doWrite({op:'write', id:'__q'+i, panel:2, persist:'ephemeral', scratch:true,
+                     chunks:[{tex:scratch[i].tex, say:scratch[i].say}]});
+  }
+  if(point && items.has(point)) await doPoint({target:point, hold:800});
+  showCap(text); setState('idle');
+  await speak(text);
+  if(scratch){ await sleep(500); await doErase({panel:2, ids:scratch.map((_,i)=>'__q'+i)}); }
+  hideHand();
+}
+
+async function handleQuestion(text){
+  if(!text||!text.trim()||state.qa) return;
+  state.qa=true; bargeIn();
+  const t0=performance.now();
+  showCap('“'+text.trim()+'”','student');
+  badge.className='on student'; badge.textContent='student · interrupt';
+  setState('listening');
+  await new Promise(r=>setTimeout(r,600));
+
+  try{
+    const R=route(text);
+    const cmd=R.tier==='cmd'?R.cmd:null;
+    if(cmd){
+      const ms=Math.round(performance.now()-t0);
+      badge.className='on'; badge.textContent='reflex · '+ms+'ms';
+      const last=history[history.length-1], prev=history[history.length-2];
+      if(cmd==='repeat'&&last){ if(items.has(last.id)) await doPoint({target:last.id,hold:600});
+        showCap(last.said); await speak(last.said); hideHand(); }
+      else if(cmd==='back'&&prev){ if(items.has(prev.id)) await doPoint({target:prev.id,hold:600});
+        showCap("Sure — going back a step. "+prev.said); await speak("Sure, going back a step. "+prev.said); hideHand(); }
+      else if(cmd==='slower'){ const s=Math.max(.75,state.speed-.25); state.speed=s; $('#speed').value=String(s);
+        showCap("Alright, slowing down."); await speak("Alright, slowing down."); }
+      else if(cmd==='faster'){ const s=Math.min(2,state.speed+.5); state.speed=s; $('#speed').value=String(s);
+        showCap("Speeding up."); await speak("Speeding up."); }
+      else if(cmd==='pause'){ state.playing=false; $('#play').textContent='▶ Play';
+        showCap("Paused. Say “continue” when you're ready."); await speak("Paused. Say continue when you're ready."); }
+      else if(cmd==='resume'){ if(!state.playing){ state.playing=true; $('#play').textContent='❚❚ Pause';
+          if(state.idx===0) play(); } showCap("Right — where were we."); await speak("Right, where were we."); }
+      else if(cmd==='restart'){ state.qa=false; $('#restart').click(); return; }
+      else { showCap("Nothing to go back to yet."); await speak("Nothing to go back to yet."); }
+      state.qa=false; badge.textContent='lecturing'; return;
+    }
+
+    if(R.tier==='notation'){
+      await answerWith(R.n.say, R.n.ref, null, 'reflex', Math.round(performance.now()-t0));
+      state.qa=false; return; }
+
+    if(R.tier==='fact'){
+      await answerWith(R.f.say, R.f.point, R.f.scratch, 'fast', Math.round(performance.now()-t0));
+      state.qa=false; return; }
+
+    /* deep tier */
+    setState('thinking'); showCap('…');
+    badge.className='on deep'; badge.textContent=LLM.ok?('deep · '+LLM.model):'deep · thinking';
+    if(LLM.ok){
+      let out=null;
+      try{ out=await askLLM(text); }catch(e){}
+      const ms=Math.round(performance.now()-t0);
+      if(out) await answerWith(out, null, null, 'deep · '+LLM.model, ms);
+      else await answerWith("The local model didn't come back in time. Try again, or ask me something from the lecture itself.", null, null, 'deep · failed', ms);
+    } else {
+      await new Promise(r=>setTimeout(r,2200));
+      const topics=FACTS.slice(0,6).map(f=>f.topic).join('; ');
+      await answerWith("That's outside what I have in the lecture graph for this theorem, and I'd rather say so than guess. I can speak to: "+topics+
+        ". For anything else, point me at a local model and I'll actually reason about it.",
+        null, null, 'deep · no match', Math.round(performance.now()-t0));
+    }
+  } catch(err){ console.warn(err); }
+  finally{ state.qa=false; setState('idle'); badge.textContent='lecturing'; }
+}
+
+/* --- speech recognition --- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const srstat=$('#srstat');
+let rec=null, listening=false;
+function srMsg(h){ srstat.innerHTML=h; }
+
+function initSR(){
+  if(!SR){ $('#mic').disabled=true; $('#alwaysOn').disabled=true;
+    srMsg('No speech recognition in this browser — <b>use the text box</b>.'); return; }
+  rec=new SR(); rec.lang='en-US'; rec.interimResults=true; rec.continuous=true;
+  rec.onresult=e=>{
+    let interim='', final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal) final+=r[0].transcript; else interim+=r[0].transcript;
+    }
+    if((interim+final).trim() && !state.qa) bargeIn();          // stop mid-word
+    if(interim) srMsg('<span id="heard">'+interim+'…</span>');
+    if(final.trim()){ srMsg(''); handleQuestion(final.trim()); }
+  };
+  rec.onerror=e=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed')
+      srMsg('Mic blocked. Chrome disables it on <b>file://</b> — serve over localhost, or use the text box.');
+    else if(e.error==='network') srMsg('Speech service unreachable — <b>use the text box</b>.');
+    else if(e.error!=='no-speech'&&e.error!=='aborted') srMsg('Mic error: '+e.error);
+    stopListen();
+  };
+  rec.onend=()=>{ if(listening&&$('#alwaysOn').checked){ try{rec.start();}catch(e){} } else stopListen(); };
+  srMsg('Hold the mic button (or the <b>Q</b> key) and ask.');
+}
+function startListen(){ if(!rec||listening) return; listening=true;
+  $('#mic').classList.add('live'); try{rec.start();}catch(e){} }
+function stopListen(){ listening=false; $('#mic').classList.remove('live'); try{rec&&rec.stop();}catch(e){} }
+
+$('#mic').addEventListener('mousedown',startListen);
+addEventListener('mouseup',()=>{ if(!$('#alwaysOn').checked) stopListen(); });
+addEventListener('keydown',e=>{ if(e.key==='q'&&!e.repeat&&document.activeElement!==$('#qtext')) startListen(); });
+addEventListener('keyup',  e=>{ if(e.key==='q'&&!$('#alwaysOn').checked) stopListen(); });
+$('#alwaysOn').onchange=e=>{
+  if(e.target.checked){ startListen();
+    srMsg('Always listening — <b>wear headphones</b>, or he will hear himself and interrupt his own sentence.'); }
+  else { stopListen(); srMsg('Hold the mic button (or the <b>Q</b> key) and ask.'); }
+};
+$('#qtext').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.value.trim()){ handleQuestion(e.target.value.trim()); e.target.value=''; }
+  e.stopPropagation();
+});
+
+addEventListener('keydown',e=>{
+  if(e.code==='Space'&&document.activeElement!==$('#qtext')){ e.preventDefault(); $('#play').click(); }
+});
+
+/* --- environment check: tell a first-time visitor what will and won't work --- */
+function envCheck(){
+  const bar=$('#envbar'), rows=[];
+  const isFile=location.protocol==='file:';
+  const ua=navigator.userAgent;
+  const chromium=/Chrome|Chromium|Edg/.test(ua)&&!/OPR/.test(ua);
+  const safari=/Safari/.test(ua)&&!/Chrome|Chromium|Edg/.test(ua);
+  const firefox=/Firefox/.test(ua);
+
+  if(isFile && !safari) rows.push('<span class="warn">▲ Opened as a file.</span> The board and typed questions work, but Chrome blocks the microphone on <code>file://</code>. For voice, run the <code>start-mac.command</code> / <code>start-windows.bat</code> launcher in this folder.');
+  const fontsOK=!document.fonts||document.fonts.check('16px KaTeX_Math');
+  if(!fontsOK) rows.push('<span class="warn">▲ Math fonts didn\'t load</span> — symbols will look wrong. The launcher script fixes this too.');
+
+  const nv=('speechSynthesis' in window)?speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang)).length:0;
+  if(!('speechSynthesis' in window)) rows.push('<span class="bad">✕ No speech synthesis</span> — the lecture will run silently with captions.');
+  else if(!nv) rows.push('<span class="warn">▲ No English system voices found.</span> On Linux install <code>espeak-ng</code>; on Windows add a voice in Settings → Time &amp; Language → Speech.');
+  else if(!/natural|online|premium|enhanced/i.test((VOICE&&VOICE.name)||'')){
+    const win=/Windows/.test(ua), mac=/Mac OS X/.test(ua);
+    rows.push('<span class="warn">▲ Only basic system voices.</span> '+(
+      win ? 'Open this page in <b>Microsoft Edge</b> instead — Edge exposes the Microsoft Natural neural voices, which are the best available on any platform. Big difference, no install.'
+      : mac? 'System Settings → Accessibility → Spoken Content → System Voice → <b>Manage Voices</b>, and install <b>Ava</b> or <b>Zoe (Premium)</b>. Big difference, takes a minute.'
+      : 'Install better voices for your system, or expect a robotic reading.'));
+  }
+
+  if(!SR) rows.push('<span class="warn">▲ No speech recognition in '+(firefox?'Firefox':'this browser')+'</span> — use the text box, or open in Safari, Chrome or Edge for voice input.');
+
+  if(!rows.length) rows.push('<span class="ok">✓ Board, voice output and microphone all available.</span> Hold the mic button or the <b>Q</b> key to interrupt him.');
+  bar.innerHTML=rows.join('<br>'); bar.classList.add('show');
+}
+
+let _tries=0;
+(function ready(){
+  if(typeof katex==='undefined'){
+    if(++_tries>80){                                   // ~5s: local assets AND cdn both failed
+      $('#envbar').innerHTML='<span class="bad">✕ KaTeX failed to load.</span> Keep the <code>assets/</code> folder next to this file, or connect to the internet so the CDN fallback can be used.';
+      $('#envbar').classList.add('show'); return;
+    }
+    return setTimeout(ready,60);
+  }
+  initSR();
+  setTimeout(envCheck,700);                            // let voices + fonts settle first
+  probeLLM().then(()=>{ if(LLM.ok) srMsg('Deep tier live via local <b>'+LLM.model+'</b>. Hold the mic or the <b>Q</b> key.'); });
+})();
+</script>
+</body>
+</html>

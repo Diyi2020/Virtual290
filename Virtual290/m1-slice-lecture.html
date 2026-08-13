@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual290 — arXiv:2607.21798, full lecture</title>
+<!-- KaTeX is vendored in assets/ so this runs with no internet.
+     If assets/ is missing (e.g. only the .html was shared), fall back to the CDN. -->
+<link id="kcss" rel="stylesheet" href="assets/katex/katex.min.css"
+      onerror="this.onerror=null;this.href='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'">
+<script defer src="assets/katex/katex.min.js"
+      onerror="this.onerror=null;var s=document.createElement('script');s.defer=true;s.src='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js';document.head.appendChild(s);"></script>
+<style>
+:root{
+  --board-bg:#22302b; --board-bg2:#1a2521;
+  --chalk:#e9e5d8; --chalk-dim:#b9c2b4;
+  --chalk-yellow:#f2d98a; --chalk-blue:#a8cbe0;
+  --math-size:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+/* chalk-ish handwriting: macOS ships Chalkduster/Bradley Hand, Windows ships Ink Free
+   (Win10+) and Segoe Script, Linux usually falls through to generic cursive. Math glyphs
+   come from vendored KaTeX fonts, so formulas look identical on every platform. */
+body{background:#14100c;
+     font-family:'Chalkduster','Bradley Hand','Ink Free','Segoe Script','Comic Sans MS',cursive;
+     color:var(--chalk);overflow:hidden;-webkit-font-smoothing:antialiased}
+
+#stage{position:relative;height:100vh;display:flex;flex-direction:column;padding:14px 14px 0}
+#board{
+  position:relative;flex:1;min-height:0;border:14px solid #3d2b1d;border-radius:4px;
+  box-shadow:0 0 0 2px #241a12,0 18px 50px rgba(0,0,0,.7),inset 0 0 120px rgba(0,0,0,.55);
+  background:radial-gradient(120% 80% at 22% 18%,#2a3a33 0%,transparent 60%),
+             radial-gradient(90% 70% at 78% 75%,#26352f 0%,transparent 65%),
+             linear-gradient(180deg,var(--board-bg) 0%,var(--board-bg2) 100%);
+  overflow:hidden;
+}
+#board::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:6;opacity:.16;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+#board::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.055;
+  background:repeating-linear-gradient(97deg,rgba(233,229,216,.9) 0 2px,transparent 2px 26px),
+             repeating-linear-gradient(-83deg,rgba(233,229,216,.6) 0 1px,transparent 1px 41px);filter:blur(1.4px)}
+
+#panels{position:relative;z-index:2;height:100%;display:grid;grid-template-columns:1fr 1fr 1fr}
+.panel{position:relative;padding:18px 20px 30px;overflow:hidden;display:flex;flex-direction:column;gap:9px;align-content:start}
+.panel+.panel{box-shadow:inset 1px 0 0 rgba(233,229,216,.09)}
+.panel-tag{position:absolute;bottom:6px;right:10px;font-size:10px;letter-spacing:.14em;color:var(--chalk);opacity:.16;text-transform:uppercase;pointer-events:none}
+
+.item{position:relative;max-width:100%;line-height:1.32}
+.item .fit{transform-origin:left top;display:block}
+.item.head{margin-top:6px;margin-bottom:2px;font-size:17px}
+.item.head::after{content:'';display:block;height:1px;margin-top:5px;width:72%;
+  background:linear-gradient(90deg,rgba(233,229,216,.75),rgba(233,229,216,.05));transform:rotate(-.35deg);opacity:0;transition:opacity .5s .25s}
+.item.head.done::after{opacity:.85}
+.item.cont{padding-left:26px;margin-top:-3px}
+.item.scratch{opacity:.72;font-size:.9em}
+.item.chalked{filter:url(#chalkRough)}
+body.nochalk .item.chalked{filter:none}
+.katex{font-size:var(--math-size)!important;color:var(--chalk)}
+.item.scratch .katex{color:var(--chalk-dim)}
+.prov{position:absolute;left:-11px;top:.42em;width:3px;height:calc(100% - .8em);min-height:10px;
+  background:var(--chalk-yellow);opacity:0;border-radius:2px;transition:opacity .5s}
+.item.done .prov{opacity:.42}
+.prov:hover{opacity:.95}
+
+.glyph{display:inline-block;opacity:0;transform:rotate(var(--rot,0deg)) translateY(var(--dy,0px));
+  text-shadow:0 0 1.1px rgba(255,255,255,.42),0 0 5px rgba(233,229,216,.10)}
+.glyph.inked{animation:ink 150ms cubic-bezier(.3,.7,.4,1) forwards}
+@keyframes ink{0%{opacity:0;clip-path:inset(0 100% 0 0);filter:blur(.7px)}55%{opacity:.95}100%{opacity:1;clip-path:inset(0 -8% 0 0);filter:blur(0)}}
+
+#overlay{position:absolute;inset:0;z-index:4;pointer-events:none}
+#overlay path,#overlay rect{fill:none;stroke-linecap:round;stroke-linejoin:round;filter:url(#chalkRough);
+  stroke-dasharray:var(--len,600);stroke-dashoffset:var(--len,600);animation:draw var(--dur,600ms) ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+#overlay text{fill:var(--chalk-yellow);font-family:'Chalkduster','Comic Sans MS',cursive;font-size:12px;opacity:0;animation:fadein .5s .35s forwards}
+@keyframes fadein{to{opacity:.9}}
+
+.eraser{position:absolute;left:0;right:0;height:46px;z-index:5;pointer-events:none;filter:blur(3px);
+  background:linear-gradient(180deg,rgba(233,229,216,0),rgba(233,229,216,.09) 35%,rgba(233,229,216,.14) 55%,rgba(233,229,216,0))}
+.item.wiped{opacity:0;filter:blur(2.5px);transition:opacity .38s,filter .38s,height .3s .25s,margin .3s .25s}
+.smudge{position:absolute;z-index:1;pointer-events:none;border-radius:50%;filter:blur(6px);
+  background:radial-gradient(ellipse,rgba(233,229,216,.10),transparent 70%)}
+
+#hand{position:absolute;z-index:7;width:44px;height:56px;left:0;top:0;opacity:0;
+  transition:transform .5s cubic-bezier(.22,.8,.3,1),opacity .3s;will-change:transform;pointer-events:none;
+  filter:drop-shadow(0 3px 7px rgba(0,0,0,.55))}
+#hand.show{opacity:.95}
+
+/* ---------------- cartoon professor ---------------- */
+/* He walks along the foot of the board to stay out of the way of what he's
+   writing. Opacity duck is the last resort — never hide the mathematics. */
+#prof{position:absolute;left:0;bottom:0;z-index:7;width:185px;height:270px;pointer-events:none;
+  filter:drop-shadow(0 6px 18px rgba(0,0,0,.5));will-change:transform;
+  transition:transform .95s cubic-bezier(.4,.05,.3,1),opacity .45s}
+#prof.duck{opacity:.28}
+#prof svg{width:100%;height:100%;overflow:visible}
+#armR{transition:transform .6s cubic-bezier(.22,.8,.3,1);transform-origin:126px 150px}
+#armL{transition:transform .6s cubic-bezier(.22,.8,.3,1);transform-origin:74px 150px}
+body[data-state="thinking"] #armL{transform:rotate(-58deg)}
+#brows{transition:transform .3s}
+body[data-state="thinking"] #brows{transform:translateY(-3px)}
+body[data-state="listening"] #brows{transform:translateY(-4px)}
+#eyeL,#eyeR{transition:transform .08s;transform-origin:center}
+#eyeL.blink,#eyeR.blink{transform:scaleY(.12)}
+#bubble{opacity:0;transition:opacity .35s}
+body[data-state="thinking"] #bubble{opacity:1}
+#bubble circle{fill:#e9e5d8;opacity:.5}
+#bubble circle:nth-child(1){animation:blip 1.2s infinite}
+#bubble circle:nth-child(2){animation:blip 1.2s .2s infinite}
+#bubble circle:nth-child(3){animation:blip 1.2s .4s infinite}
+@keyframes blip{0%,100%{opacity:.18}50%{opacity:.85}}
+#prof .mouth{transition:d .09s}
+
+/* ---------------- caption + controls ---------------- */
+#caption{position:relative;z-index:8;min-height:56px;display:flex;align-items:center;gap:12px;padding:10px 16px;margin-top:10px}
+#actbadge{flex:none;font-size:10px;letter-spacing:.13em;text-transform:uppercase;padding:5px 10px;border-radius:999px;background:rgba(233,229,216,.09);color:rgba(233,229,216,.6);opacity:0;transition:opacity .3s;white-space:nowrap}
+#actbadge.on{opacity:1}
+#badge{flex:none;font-size:10px;letter-spacing:.13em;text-transform:uppercase;padding:5px 10px;
+  border:1px solid rgba(233,229,216,.28);border-radius:999px;color:var(--chalk-dim);opacity:0;transition:opacity .3s;white-space:nowrap}
+#badge.on{opacity:.85}
+#badge.student{color:var(--chalk-blue);border-color:rgba(168,203,224,.5)}
+#badge.deep{color:var(--chalk-yellow);border-color:rgba(242,217,138,.5)}
+#cap{font-size:16px;line-height:1.45;opacity:.9}
+#cap.student{color:var(--chalk-blue)}
+#cap .lit{color:var(--chalk-yellow);opacity:.95}
+
+#controls{position:relative;z-index:8;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:0 16px 12px;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;font-size:12px}
+button,select{font:inherit;background:rgba(233,229,216,.06);color:var(--chalk);
+  border:1px solid rgba(233,229,216,.22);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:hover{background:rgba(233,229,216,.14)}
+select{max-width:190px}
+label{display:flex;align-items:center;gap:5px;color:var(--chalk-dim);cursor:pointer;user-select:none}
+#prog{flex:1;min-width:100px;height:3px;background:rgba(233,229,216,.13);border-radius:2px;overflow:hidden}
+#prog i{display:block;height:100%;width:0;background:var(--chalk-dim);transition:width .3s}
+.hint{color:rgba(233,229,216,.35)}
+#note{position:absolute;top:12px;right:14px;z-index:9;font-family:ui-sans-serif,system-ui,sans-serif;
+  font-size:10px;color:rgba(233,229,216,.3);letter-spacing:.08em;text-transform:uppercase}
+
+/* ---------------- ask bar ---------------- */
+#ask{position:relative;z-index:8;display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  padding:9px 16px 14px;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;font-size:12px;
+  border-top:1px solid rgba(233,229,216,.08)}
+#mic{border-color:rgba(242,217,138,.4);color:var(--chalk-yellow);min-width:120px}
+#mic.live{background:rgba(242,217,138,.18);animation:pulse 1.1s infinite}
+#mic:disabled{opacity:.35;cursor:not-allowed;animation:none}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,217,138,.35)}50%{box-shadow:0 0 0 7px rgba(242,217,138,0)}}
+#qtext{flex:1;min-width:200px;font:inherit;background:rgba(233,229,216,.06);color:var(--chalk);
+  border:1px solid rgba(233,229,216,.22);border-radius:6px;padding:7px 11px}
+#qtext::placeholder{color:rgba(233,229,216,.32)}
+#srstat{font-size:11px;color:rgba(233,229,216,.4);max-width:100%}
+#srstat b{color:var(--chalk-yellow);font-weight:600}
+#heard{color:var(--chalk-blue);font-style:italic}
+
+/* ---------------- background calibration ---------------- */
+#calib{position:relative;z-index:8;padding:2px 16px 10px;
+  font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;font-size:12px}
+.calib-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  color:rgba(233,229,216,.55);margin-bottom:7px}
+.calib-head .presets{display:flex;gap:5px;flex-wrap:wrap}
+.calib-head button{padding:3px 9px;font-size:11px;border-radius:5px}
+#calib-est{margin-left:auto;color:var(--chalk-yellow);opacity:.85;white-space:nowrap}
+#calib-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:5px 18px}
+.crow{display:flex;align-items:center;gap:9px}
+.crow .lbl{flex:1;color:rgba(233,229,216,.62);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:flex;border:1px solid rgba(233,229,216,.2);border-radius:6px;overflow:hidden;flex:none}
+.seg button{border:0;border-radius:0;padding:3px 9px;font-size:10.5px;background:transparent;
+  color:rgba(233,229,216,.5);cursor:pointer}
+.seg button+button{border-left:1px solid rgba(233,229,216,.16)}
+.seg button.on{background:rgba(242,217,138,.2);color:var(--chalk-yellow)}
+#envbar{padding:0 16px 12px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;
+  color:rgba(233,229,216,.42);line-height:1.6;display:none}
+#envbar.show{display:block}
+#envbar .ok{color:#9fc4a4}#envbar .warn{color:var(--chalk-yellow)}#envbar .bad{color:#e0a0a0}
+#envbar code{background:rgba(233,229,216,.1);padding:1px 5px;border-radius:3px;font-size:10.5px}
+</style>
+</head>
+<body data-state="idle">
+
+<svg width="0" height="0" style="position:absolute">
+  <filter id="chalkRough" x="-6%" y="-8%" width="112%" height="116%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.055" numOctaves="3" seed="11" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="1.7" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <marker id="arrowhead" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0,0 L7,3.5 L0,7" fill="none" stroke="#f2d98a" stroke-width="1.4"/>
+  </marker>
+</svg>
+
+<div id="stage">
+  <div id="board">
+    <div id="note">arXiv:2607.21798 · full paper · three acts</div>
+    <div id="panels">
+      <div class="panel" data-p="0"><span class="panel-tag">board 1</span></div>
+      <div class="panel" data-p="1"><span class="panel-tag">board 2</span></div>
+      <div class="panel" data-p="2"><span class="panel-tag">board 3</span></div>
+    </div>
+    <svg id="overlay"></svg>
+
+    <div id="hand">
+      <svg viewBox="0 0 44 56">
+        <g fill="none" stroke="#e9e5d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+          <path d="M13 6 L13 26"/>
+          <path d="M13 26 C10 28 8.5 32 9.5 37 C10.5 44.5 16 51 23 52 C31 53 37 48 37.5 41 L37.5 28
+                   M37.5 28 C37.5 25.6 34 25.6 34 28 L34 34.5 M34 31.5 C34 29 30.5 29 30.5 31.5 L30.5 35.5
+                   M30.5 32.5 C30.5 30 27 30 27 32.5 L27 36.5"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- cartoon professor: generic character, not a likeness of any real person -->
+    <div id="prof">
+      <svg viewBox="0 0 200 340">
+        <defs>
+          <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#7e9db4"/><stop offset="1" stop-color="#5d7c93"/>
+          </linearGradient>
+          <linearGradient id="vest" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8a6f52"/><stop offset="1" stop-color="#6d573f"/>
+          </linearGradient>
+        </defs>
+
+        <!-- legs / lower body fading into the floor -->
+        <path d="M78 300 L74 340 M122 300 L126 340" stroke="#4a4038" stroke-width="20" stroke-linecap="round" opacity=".55"/>
+
+        <!-- left arm (character's right) -->
+        <g id="armL">
+          <path d="M74 150 L46 200 L40 232" fill="none" stroke="url(#shirt)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="39" cy="238" r="11" fill="#e8b287"/>
+        </g>
+
+        <!-- torso -->
+        <path d="M62 148 C62 128 78 118 100 118 C122 118 138 128 138 148 L142 302 L58 302 Z" fill="url(#shirt)"/>
+        <path d="M74 146 C74 130 84 122 100 122 C116 122 126 130 126 146 L128 300 L72 300 Z" fill="url(#vest)" opacity=".92"/>
+        <path d="M100 122 L100 300" stroke="#5a4733" stroke-width="1.6" opacity=".5"/>
+        <circle cx="100" cy="176" r="2.6" fill="#4a3a2a" opacity=".7"/>
+        <circle cx="100" cy="212" r="2.6" fill="#4a3a2a" opacity=".7"/>
+        <circle cx="100" cy="248" r="2.6" fill="#4a3a2a" opacity=".7"/>
+        <!-- collar -->
+        <path d="M82 122 L100 142 L118 122 L112 116 L100 128 L88 116 Z" fill="#f0efe9"/>
+
+        <!-- neck + head -->
+        <path d="M90 100 L90 124 L110 124 L110 100 Z" fill="#d69b6e"/>
+        <ellipse cx="100" cy="66" rx="37" ry="41" fill="#e8b287"/>
+        <path d="M63 66 C63 70 60 74 58 72" fill="#e8b287"/>
+        <ellipse cx="62" cy="70" rx="6" ry="9" fill="#e8b287"/>
+        <ellipse cx="138" cy="70" rx="6" ry="9" fill="#e8b287"/>
+
+        <!-- hair -->
+        <path d="M63 58 C63 30 80 21 100 21 C122 21 138 32 137 60
+                 C133 44 120 40 104 43 C90 45 76 44 70 52 C67 55 65 58 63 58 Z" fill="#33302f"/>
+        <path d="M137 60 C140 47 134 33 122 27 C132 34 134 46 133 56 Z" fill="#3d3a38"/>
+
+        <!-- brows -->
+        <g id="brows">
+          <path d="M74 52 C80 47 90 47 95 51" stroke="#33302f" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+          <path d="M105 51 C110 47 120 47 126 52" stroke="#33302f" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+        </g>
+
+        <!-- eyes -->
+        <ellipse id="eyeL" cx="85" cy="66" rx="5.2" ry="6.2" fill="#2c2620"/>
+        <ellipse id="eyeR" cx="115" cy="66" rx="5.2" ry="6.2" fill="#2c2620"/>
+        <circle cx="86.8" cy="63.6" r="1.7" fill="#fff" opacity=".85"/>
+        <circle cx="116.8" cy="63.6" r="1.7" fill="#fff" opacity=".85"/>
+
+        <!-- glasses -->
+        <g fill="none" stroke="#37373f" stroke-width="3">
+          <rect x="70" y="54" width="30" height="24" rx="9" fill="#cfe4ee" fill-opacity=".13"/>
+          <rect x="100" y="54" width="30" height="24" rx="9" fill="#cfe4ee" fill-opacity=".13"/>
+          <path d="M100 64 L100 64.5"/>
+          <path d="M70 62 L60 66 M130 62 L140 66" stroke-width="2.6"/>
+        </g>
+
+        <!-- nose + mouth -->
+        <path d="M100 70 C97 79 96 82 101 84" stroke="#c98f62" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <path class="mouth" id="mouth" d="M88 93 C94 98 106 98 112 93" stroke="#8c4a3c" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+        <!-- right arm (writing arm) -->
+        <g id="armR">
+          <path d="M126 150 L158 196 L166 224" fill="none" stroke="url(#shirt)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="167" cy="230" r="11" fill="#e8b287"/>
+          <rect x="163" y="234" width="8" height="17" rx="3" fill="#f2efe4" transform="rotate(14 167 242)"/>
+        </g>
+
+        <g id="bubble"><circle cx="150" cy="34" r="3.4"/><circle cx="162" cy="27" r="3.4"/><circle cx="174" cy="20" r="3.4"/></g>
+      </svg>
+    </div>
+  </div>
+
+  <div id="caption">
+    <span id="actbadge"></span><span id="badge"></span>
+    <span id="cap">Set your background and pick the proofs, then press <b>Play</b>.</span>
+  </div>
+
+  <div id="calib">
+    <div class="calib-head">
+      <span>Before we start — what do you already know?</span>
+      <span class="presets">
+        <button data-preset="all">teach me everything</button>
+        <button data-preset="qi">I do quantum info</button>
+        <button data-preset="prob">I do probability</button>
+        <button data-preset="none">just the theorem</button>
+      </span>
+      <span id="calib-est"></span>
+    </div>
+    <div id="calib-rows"></div>
+    <div class="calib-head" style="margin-top:9px">
+      <span>Which steps should he prove in full?</span>
+      <span class="presets">
+        <button data-dpreset="all">prove all three</button>
+        <button data-dpreset="none">overview only</button>
+      </span>
+    </div>
+    <div id="dive-rows"></div>
+  </div>
+
+  <div id="controls">
+    <button id="play">▶ Play</button>
+    <button id="restart">↺ Restart</button>
+    <select id="speed">
+      <option value="0.75">0.75×</option><option value="1" selected>1×</option>
+      <option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option>
+    </select>
+    <label><input type="checkbox" id="voiceOn" checked> voice</label>
+    <select id="voicePick" title="System voices. macOS 'Premium'/'Enhanced' voices sound far better — install via System Settings → Accessibility → Spoken Content → Manage Voices."></select>
+    <label><input type="checkbox" id="chalkTx" checked> chalk</label>
+    <div id="prog"><i></i></div>
+    <span class="hint">space = play/pause</span>
+  </div>
+
+  <div id="ask">
+    <button id="mic" title="Hold to talk (or hold the Q key)">🎤 Hold to ask</button>
+    <label><input type="checkbox" id="alwaysOn"> always listening</label>
+    <input id="qtext" placeholder="…try “where does the factor of 1/n come from?” or “what is a group mixer?”">
+    <span id="srstat"></span>
+  </div>
+  <div id="envbar"></div>
+</div>
+
+<script>
+/* ============================================================================
+   arXiv:2607.21798 — full lecture, three acts.
+     ACT I   prerequisites  (adaptive: full / brief / skip per block)
+     ACT II  the paper      (problem, why it matters, strategy, key techniques)
+     ACT III deep dives     (selectable; proved properly on the board)
+   Op fields: block+depth -> Act I | act:2 -> Act II | dive:<id> -> Act III
+   ============================================================================ */
+
+const BLOCKS=[
+ {id:'p1', title:'Davies generators and the model', probe:'mean-field Heisenberg Hamiltonian, Gibbs state, Davies generator, Bohr frequencies, Metropolis weights'},
+ {id:'p2', title:'KMS inner product and the variational gap', probe:'KMS inner product, detailed balance, Dirichlet form, variance, variational gap, mixing time'},
+ {id:'p3', title:'Divergence form of the Dirichlet form', probe:'commutator divergence form of the Davies Dirichlet form'},
+ {id:'p4', title:'Schur–Weyl and the Heisenberg spectrum', probe:'Schur-Weyl duality, quadratic Casimir, spectral projectors, ground state degeneracy'},
+ {id:'p5', title:'Symmetry decomposition of observables', probe:'intertwiner, Schur lemma, isotypic decomposition into invariant sectors'}
+];
+
+const DIVES=[
+ {id:'d1', title:'Where β = 2 actually comes from', mins:16, covers:'§3.4 / App. D'},
+ {id:'d2', title:'Low-temperature lower bound: the SU(2) mixer', mins:13, covers:'§3.5'},
+ {id:'d3', title:'Matching upper bound: the order parameter', mins:18, covers:'§3.7'}
+];
+
+/* ============================ ACT I ============================ */
+const PREREQ = [
+/* ------------------------- p1 ------------------------- */
+{op:'head', id:'p1h', panel:0, text:'The model', persist:'pinned', block:'p1', depth:'full',
+ say:"Let's start with the model, because everything else is downstream of it."},
+{op:'write', id:'p1a', panel:0, persist:'pinned', block:'p1', depth:'full',
+ pre:"n qubits sitting on a complete graph. Every pair interacts, ferromagnetically, and isotropically — meaning the coupling treats X, Y and Z on the same footing.",
+ chunks:[{tex:'H=-\\dfrac{1}{n}\\!\\!\\sum_{1\\le i<j\\le n}\\!\\!\\mathbf{S}_i\\cdot\\mathbf{S}_j',
+          say:"H equals minus one over n, sum over i less than j, of S i dotted with S j"}],
+ post:"Bold S sub i is the vector of spin-one-half Pauli matrices on site i, so that dot product is S X S X plus S Y S Y plus S Z S Z."},
+{op:'say', block:'p1', depth:'full',
+ text:"Two design choices worth pausing on. The complete graph is what makes this mean-field: every spin feels the average of all the others, and there's no geometry to worry about. And the one over n out front is a normalisation — there are order n squared pairs, so without it the energy would grow like n squared instead of like n. With it, the energy per site stays bounded, which is what you need for a sensible thermodynamic limit."},
+{op:'say', block:'p1', depth:'full',
+ text:"Now the dynamics. We want a Lindbladian that thermalises. You could write down something ad hoc, but the Davies generator is what you get from an honest derivation: couple the system to a thermal bath, take the weak-coupling limit, and this is what falls out. So it isn't a modelling choice so much as a consequence."},
+{op:'write', id:'p1b', panel:0, persist:'pinned', block:'p1', depth:'full',
+ pre:"The construction needs three inputs. A Hamiltonian, an inverse temperature, and a set of jump operators. Here the jumps are the single-site Paulis — three per site, three n in total. That's what the subscript loc records.",
+ chunks:[{tex:'\\mathcal{L}_{\\mathrm{loc}}',say:"Script L loc,"},
+         {tex:',\\ \\ \\mathcal{J}=\\{S_i^\\alpha\\}_{i\\in[n],\\,\\alpha\\in\\{X,Y,Z\\}}',
+          say:"with jump operators the single-site Paulis, S i alpha, for every site i and every direction alpha"}]},
+{op:'say', block:'p1', depth:'full',
+ text:"The subtlety in a Davies generator is that the jump operators don't act as written. They get decomposed by Bohr frequency first — the differences of energy eigenvalues. You split each jump into the pieces that move the system down by a fixed amount of energy, up by a fixed amount, or not at all. That's what makes the generator respect the energy structure of H rather than fighting it."},
+{op:'write', id:'p1c', panel:0, persist:'pinned', block:'p1', depth:'full',
+ chunks:[{tex:'A(\\omega)=\\sum_\\lambda \\Pi_{\\lambda+\\omega}A\\,\\Pi_\\lambda',
+          say:"A of omega equals the sum over lambda of the projector onto lambda plus omega, A, projector onto lambda"}],
+ post:"So A of omega is the part of the jump that raises the energy by exactly omega."},
+{op:'write', id:'p1d', panel:0, persist:'pinned', block:'p1', depth:'full',
+ pre:"Then each frequency gets a weight, and the weight is what encodes the temperature. It has to satisfy classical detailed balance — the ratio of up-rate to down-rate is the Boltzmann factor.",
+ chunks:[{tex:'\\dfrac{\\gamma(\\omega)}{\\gamma(-\\omega)}=e^{-\\beta\\omega}',
+          say:"gamma of omega over gamma of minus omega equals e to the minus beta omega"}],
+ post:"This paper uses the Metropolis choice — gamma of omega is the minimum of one and e to the minus beta omega. Downhill moves are free, uphill moves are suppressed exponentially. Exactly Metropolis–Hastings."},
+{op:'write', id:'p1e', panel:0, persist:'pinned', block:'p1', depth:'full',
+ pre:"And the payoff is that the Gibbs state is the unique stationary state.",
+ chunks:[{tex:'\\rho=e^{-\\beta H}/Z',say:"Rho, the Gibbs state, e to the minus beta H over Z,"},
+         {tex:',\\ \\ \\mathcal{L}_{\\mathrm{loc}}^\\dagger(\\rho)=0',say:"is annihilated by the generator"}],
+ post:"Unique, because the jump operators generate the whole algebra — their commutant is trivial. So the dynamics is primitive, and every initial state flows to rho."},
+{op:'say', block:'p1', depth:'full',
+ text:"One convention that will trip you up if you're not watching for it. We work in the Heisenberg picture throughout, evolving observables rather than states. So script L loc acts on operators, and the Schrödinger-picture generator is its adjoint, with the dagger. The gap is the same either way, but the formulas look different."},
+
+{op:'write', id:'p1a', panel:0, persist:'pinned', block:'p1', depth:'brief',
+ pre:"Fixing the model and the dynamics.",
+ chunks:[{tex:'H=-\\tfrac1n\\sum_{i<j}\\mathbf{S}_i\\cdot\\mathbf{S}_j',say:"H, mean-field Heisenberg on the complete graph,"},
+         {tex:',\\ \\ \\mathcal{L}_{\\mathrm{loc}}',say:"and script L loc, the Davies generator with single-site Pauli jumps"}],
+ post:"Metropolis weights, Heisenberg picture, and the Gibbs state as the unique fixed point. Jumps get split by Bohr frequency before they act — that detail matters later."},
+{op:'write', id:'p1a', panel:0, persist:'pinned', block:'p1', depth:'skip',
+ pre:"Notation only.",
+ chunks:[{tex:'H=-\\tfrac1n\\sum_{i<j}\\mathbf{S}_i\\cdot\\mathbf{S}_j,\\ \\ \\mathcal{L}_{\\mathrm{loc}}',
+          say:"H mean-field Heisenberg, script L loc the Davies generator with single-site Pauli jumps, Metropolis weights, Heisenberg picture"}]},
+
+/* ------------------------- p2 ------------------------- */
+{op:'head', id:'p2h', panel:0, text:'The gap, variationally', persist:'pinned', block:'p2', depth:'full',
+ say:"Second block. What exactly do we mean by the gap, and why is it computable?"},
+{op:'say', block:'p2', depth:'full',
+ text:"Here's the difficulty. A Lindbladian is not a Hermitian operator on observables. Generically its spectrum is complex, and there's no variational principle — you can't just minimise a Rayleigh quotient. That would make everything we're about to do impossible."},
+{op:'write', id:'p2a', panel:0, persist:'pinned', block:'p2', depth:'full',
+ pre:"What rescues us is that we're allowed to change the inner product. Instead of Hilbert–Schmidt, use the KMS inner product, weighted by the Gibbs state.",
+ chunks:[{tex:'\\langle X,Y\\rangle_\\rho=\\mathrm{Tr}\\big[\\rho^{1/2}X^\\dagger\\rho^{1/2}Y\\big]',
+          say:"X Y sub rho equals trace of rho to the half, X dagger, rho to the half, Y"}],
+ post:"Note the square roots are split around the X dagger. That specific placement is what makes it work."},
+{op:'write', id:'p2b', panel:0, persist:'pinned', block:'p2', depth:'full',
+ pre:"Because in that inner product, and only in that one, a Davies generator is self-adjoint.",
+ chunks:[{tex:'\\langle X,\\mathcal{L}(Y)\\rangle_\\rho=\\langle \\mathcal{L}(X),Y\\rangle_\\rho',
+          say:"X with script L of Y equals script L of X with Y"}],
+ post:"That's what KMS detailed balance means. And it hands us everything: real spectrum, negative semi-definite, and a variational principle."},
+{op:'annotate', style:'under', target:'p2b', color:'yellow', block:'p2', depth:'full'},
+{op:'write', id:'p2d', panel:0, persist:'pinned', block:'p2', depth:'full',
+ pre:"Define two quantities. The Dirichlet form, which measures dissipation, and the variance.",
+ chunks:[{tex:'\\mathcal{E}[X]=\\langle X,-\\mathcal{L}(X)\\rangle_\\rho',say:"E of X equals X paired with minus script L of X,"},
+         {tex:',\\ \\ \\mathsf{Var}_\\rho[X]=\\big\\|X-\\mathrm{Tr}[\\rho X]\\big\\|_\\rho^2',
+          say:"and the variance is the KMS norm squared of X minus its mean"}]},
+{op:'write', id:'p2c', panel:0, persist:'pinned', block:'p2', depth:'full',
+ pre:"And the gap is their minimal ratio.",
+ chunks:[{tex:'\\mathrm{gap}(\\mathcal{L})=\\min_{X}\\ \\dfrac{\\mathcal{E}[X]}{\\mathsf{Var}_\\rho[X]}',
+          say:"The gap is the minimum over X of the Dirichlet form over the variance"}]},
+{op:'annotate', style:'box', target:'p2c', color:'yellow', block:'p2', depth:'full'},
+{op:'say', block:'p2', depth:'full',
+ text:"I want you to notice the asymmetry in that formula, because the entire structure of the paper follows from it. It's a minimum. So if you produce one single observable and compute its ratio, you have an upper bound on the gap — one guess, one bound. But to get a lower bound you have to control every observable simultaneously. That's why the paper spends five sections on lower bounds and one on the upper bound."},
+{op:'write', id:'p2e', panel:0, persist:'pinned', block:'p2', depth:'full',
+ pre:"And the reason we care at all is the mixing time.",
+ chunks:[{tex:'t_{\\mathrm{mix}}(\\epsilon)\\ \\lesssim\\ \\dfrac{1}{2\\,\\mathrm{gap}}\\log\\!\\Big(\\dfrac{1}{\\lambda_{\\min}(\\rho)\\epsilon^2}\\Big)',
+          say:"The mixing time is at most one over twice the gap, times log of one over lambda min rho epsilon squared"}],
+ post:"Inverse gap, times a logarithm. For this model that log is only polynomial in n, so gap and runtime are the same question."},
+
+{op:'write', id:'p2c', panel:0, persist:'pinned', block:'p2', depth:'brief',
+ pre:"Recalling the variational picture. The generator is self-adjoint in the KMS inner product, which is what makes a Rayleigh quotient available at all.",
+ chunks:[{tex:'\\mathrm{gap}(\\mathcal{L})=\\min_X\\ \\mathcal{E}[X]/\\mathsf{Var}_\\rho[X]',
+          say:"Gap equals the minimum Rayleigh quotient, Dirichlet form over variance"}],
+ post:"One observable gives an upper bound; a lower bound must cover all of them at once. And the mixing time is one over the gap, up to a log."},
+{op:'write', id:'p2c', panel:0, persist:'pinned', block:'p2', depth:'skip',
+ chunks:[{tex:'\\mathrm{gap}=\\min_X\\ \\mathcal{E}[X]/\\mathsf{Var}_\\rho[X]',
+          say:"Gap as the minimal Rayleigh quotient, everything in the KMS inner product"}]},
+
+/* ------------------------- p3 ------------------------- */
+{op:'head', id:'p3h', panel:0, text:'Divergence form', persist:'pinned', block:'p3', depth:'full',
+ say:"Third block, and it's one formula. We need it only for the upper bound, but there we need it badly."},
+{op:'say', block:'p3', depth:'full',
+ text:"The Dirichlet form as I defined it involves applying the generator and then taking an inner product. That's awkward to estimate. There's an equivalent expression that's far more usable, because it's manifestly a sum of non-negative terms."},
+{op:'write', id:'p3a', panel:0, persist:'pinned', block:'p3', depth:'full',
+ chunks:[{tex:'\\mathcal{E}[X]=\\tfrac12\\sum_{a,\\omega}h_\\omega\\big\\|[A^a(\\omega),X]\\big\\|_\\rho^2',
+          say:"E of X equals one half, sum over jumps a and frequencies omega, h omega, times the KMS norm squared of the commutator of A a of omega with X"}]},
+{op:'say', block:'p3', depth:'full',
+ text:"Read that as a statement about what dissipation is. The Dirichlet form measures how much X fails to commute with the jump operators. An observable that commutes with every jump is conserved, doesn't dissipate, and sits in the kernel. An observable that fails badly to commute relaxes quickly. So the whole problem becomes: find the observable that commutes most nearly with all three n Paulis, without being constant."},
+{op:'write', id:'p3b', panel:0, persist:'pinned', block:'p3', depth:'full',
+ pre:"The weights come from the Metropolis choice, and they're bounded by one.",
+ chunks:[{tex:'h_\\omega=e^{-\\beta|\\omega|/2}\\ \\le\\ 1',say:"h omega equals e to the minus beta absolute omega over two, which is at most one"}],
+ post:"That crude bound — just throwing the weight away — is genuinely all we'll use in the upper bound. Which tells you the upper bound is not delicate."},
+
+{op:'write', id:'p3a', panel:0, persist:'pinned', block:'p3', depth:'brief',
+ pre:"The Dirichlet form has a divergence form: dissipation is failure to commute with the jumps.",
+ chunks:[{tex:'\\mathcal{E}[X]=\\tfrac12\\sum_{a,\\omega}h_\\omega\\|[A^a(\\omega),X]\\|_\\rho^2',
+          say:"E of X as a weighted sum of commutator norms,"},
+         {tex:',\\ h_\\omega\\le1',say:"with h omega at most one under Metropolis"}]},
+{op:'write', id:'p3a', panel:0, persist:'pinned', block:'p3', depth:'skip',
+ chunks:[{tex:'\\mathcal{E}[X]=\\tfrac12\\sum_{a,\\omega}h_\\omega\\|[A^a(\\omega),X]\\|_\\rho^2,\\ h_\\omega\\le1',
+          say:"Divergence form of the Dirichlet form, h omega at most one"}]},
+
+/* ------------------------- p4 ------------------------- */
+{op:'head', id:'p4h', panel:0, text:'Schur–Weyl', persist:'pinned', block:'p4', depth:'full',
+ say:"Fourth block. Why representation theory is not a decoration here but the actual structure."},
+{op:'write', id:'p4a', panel:0, persist:'pinned', block:'p4', depth:'full',
+ pre:"The Hamiltonian has two symmetries, and they're both large.",
+ chunks:[{tex:'U^{\\otimes n}H(U^\\dagger)^{\\otimes n}=H',say:"U tensor n, H, U dagger tensor n, equals H, for every SU two element U,"},
+         {tex:'\\quad \\sigma H\\sigma^{-1}=H',say:"and sigma H sigma inverse equals H for every permutation sigma"}],
+ post:"Global rotations, because the coupling is isotropic. Permutations, because every pair is coupled identically."},
+{op:'say', block:'p4', depth:'full',
+ text:"When two groups act on the same space and commute with each other, Schur–Weyl duality tells you how the space decomposes — and for n qubits it's as clean as it ever gets. The Hilbert space breaks into a direct sum over a total spin label s, and in each summand you get one irrep of SU(2) tensored with one irrep of the symmetric group. Crucially, every pair appears with multiplicity exactly one."},
+{op:'write', id:'p4b', panel:0, persist:'pinned', block:'p4', depth:'full',
+ chunks:[{tex:'\\mathcal{H}=\\bigoplus_{s\\in\\mathcal{S}}V_s\\otimes W_{Q(s)}',
+          say:"H decomposes as the direct sum over s of V s tensor W of Q of s"}],
+ post:"s runs over integers or half-integers up to n over two, depending on parity. V s has dimension two s plus one — that's the rotational multiplet. W is the permutation multiplicity space."},
+{op:'say', block:'p4', depth:'full',
+ text:"Multiplicity one is doing a lot of work. It means Schur's lemma pins down any symmetric operator almost completely — there's no freedom left inside a sector. And here's the consequence that matters most: up to a shift and a sign, the Heisenberg Hamiltonian is exactly the quadratic Casimir of SU(2). Which means it is constant on each sector, and its spectrum is pure representation theory."},
+{op:'write', id:'p4c', panel:0, persist:'pinned', block:'p4', depth:'full',
+ chunks:[{tex:'H=-\\dfrac1n\\sum_{s\\in\\mathcal{S}}s(s+1)\\,\\Pi_s',
+          say:"H equals minus one over n, sum over s, s times s plus one, times Pi s"}],
+ post:"Pi s is the orthogonal projector onto the spin-s sector. Energy label E s is minus s times s plus one, over n."},
+{op:'annotate', style:'box', target:'p4c', color:'yellow', block:'p4', depth:'full'},
+{op:'beat', ms:2600, block:'p4', depth:'full'},
+{op:'say', block:'p4', depth:'full',
+ text:"Two features of that spectrum you should file away. First, the energies are spaced order one over n apart. So a single-site jump, which changes the total spin by at most one step, changes the energy by at most order one over n — the Bohr frequencies are all tiny. That's exactly why the Metropolis weights are all close to one, and why the temperature dependence is so mild in places. Second, the ground state is the maximal spin, s equals n over two, and its degeneracy is n plus one — that's the symmetric subspace, the fully aligned ferromagnet and its rotations. Whereas the highest-energy sector, spin zero, has dimension growing exponentially in n. So the density of states is wildly lopsided, and that competition between energy and degeneracy is the phase transition in embryo."},
+
+{op:'write', id:'p4c', panel:0, persist:'pinned', block:'p4', depth:'brief',
+ pre:"Recalling the spectral picture. Both SU(2) and permutation symmetry, Schur–Weyl, multiplicity one.",
+ chunks:[{tex:'H=-\\tfrac1n\\sum_{s}s(s+1)\\Pi_s',say:"H is minus one over n times the quadratic Casimir, diagonal in the Schur-Weyl sectors"}],
+ post:"Energies order one over n apart, ground state the maximal-spin symmetric subspace of dimension n plus one, and exponentially many low-spin states."},
+{op:'write', id:'p4c', panel:0, persist:'pinned', block:'p4', depth:'skip',
+ chunks:[{tex:'H=-\\tfrac1n\\sum_s s(s+1)\\Pi_s',say:"H as the quadratic Casimir, Pi s the spin-s projector, energies order one over n apart"}]},
+
+/* ------------------------- p5 ------------------------- */
+{op:'head', id:'p5h', panel:0, text:'Sectors', persist:'pinned', block:'p5', depth:'full',
+ say:"Last block of setup, and it's the one that organises the whole proof."},
+{op:'say', block:'p5', depth:'full',
+ text:"So far the symmetry statements were about H. But we need them about the generator. And they do transfer — because the jump operators are the single-site Paulis, and that set is itself invariant under both rotations and permutations. The upshot is that the Davies generator is an intertwiner for the product group."},
+{op:'write', id:'p5b', panel:0, persist:'pinned', block:'p5', depth:'full',
+ chunks:[{tex:'\\mathcal{L}_{\\mathrm{loc}}\\circ\\Delta_{U,\\sigma}=\\Delta_{U,\\sigma}\\circ\\mathcal{L}_{\\mathrm{loc}}',
+          say:"Script L loc composed with the group action equals the group action composed with script L loc"}],
+ post:"It commutes with the symmetry. Which means Schur's lemma applies not to the Hilbert space now, but to the space of observables."},
+{op:'say', block:'p5', depth:'full',
+ text:"And that's the key structural move. Decompose the observable algebra into subspaces that the symmetry distinguishes; the dynamics can never mix them. So the gap of the whole generator is just the worst gap among the pieces, and you can attack them one at a time with completely different tools."},
+{op:'write', id:'p5c', panel:0, persist:'pinned', block:'p5', depth:'full',
+ pre:"First cut: split off the permutation-invariant observables from everything else.",
+ chunks:[{tex:'\\mathcal{B}(\\mathcal{H})=\\mathrm{comm}(\\mathsf{S}_n)\\oplus\\mathrm{comm}(\\mathsf{S}_n)^{\\perp_\\rho}',
+          say:"B of H is the commutant of S n, direct sum its KMS orthogonal complement"}]},
+{op:'write', id:'p5a', panel:0, persist:'pinned', block:'p5', depth:'full',
+ pre:"Second cut: grade the invariant part by SU(2) isotype.",
+ chunks:[{tex:'\\mathrm{comm}(\\mathsf{S}_n)=\\bigoplus_{\\ell\\ge0}\\mathcal{A}^{(\\ell)}',
+          say:"The commutant of S n is the direct sum over ell of A super ell"}],
+ post:"Ell counts the spin of the observable under rotation, exactly as ell labels angular momentum for a wavefunction."},
+{op:'write', id:'p5d', panel:0, persist:'pinned', block:'p5', depth:'full',
+ pre:"And the bottom of that grading has a concrete description worth having in front of you.",
+ chunks:[{tex:'\\mathcal{A}^{(0)}=\\mathrm{span}\\{\\Pi_s:s\\in\\mathcal{S}\\}',
+          say:"A zero is the span of the spectral projectors"}],
+ post:"An observable invariant under both groups can only be a function of the total spin. So that sector is small — its dimension is the number of spin values, order n, rather than exponential."},
+
+{op:'write', id:'p5a', panel:0, persist:'pinned', block:'p5', depth:'brief',
+ pre:"The generator is an intertwiner, so Schur's lemma decomposes the observables into invariant sectors.",
+ chunks:[{tex:'\\mathrm{comm}(\\mathsf{S}_n)=\\bigoplus_{\\ell\\ge0}\\mathcal{A}^{(\\ell)}',
+          say:"The isotypic decomposition into A super ell sectors, each preserved by the generator"}],
+ post:"Plus the non-permutation-invariant complement. A zero is the span of the spectral projectors — functions of total spin."},
+{op:'write', id:'p5a', panel:0, persist:'pinned', block:'p5', depth:'skip',
+ chunks:[{tex:'\\mathrm{comm}(\\mathsf{S}_n)=\\bigoplus_{\\ell\\ge0}\\mathcal{A}^{(\\ell)}',
+          say:"A super ell for the SU two isotypic sectors, A zero the span of spectral projectors"}]}
+];
+
+/* ============================ ACT II ============================ */
+const ACT2 = [
+{op:'say', act:2, text:"Right. That's the machinery. Now the paper itself — what problem it solves, why anyone should care, how the proof is organised, and what's genuinely new in it. I'll work at the level of ideas here, and then we'll slow down and prove three things properly."},
+
+{op:'head', id:'q0', panel:1, text:'The problem', persist:'working', act:2, say:"Start with the motivation, because it isn't abstract."},
+{op:'say', act:2, text:"One of the most plausible uses of a quantum computer is simulating quantum matter at finite temperature. Not ground states — thermal states, at some temperature you choose. Classically that means computations over a Hilbert space of dimension two to the n, and generically you're stuck."},
+{op:'say', act:2, text:"There's a natural quantum approach, and it's the direct analogue of Markov chain Monte Carlo. Rather than writing down the thermal state, engineer a dissipative process whose unique fixed point is that state, and let it run."},
+{op:'write', id:'q1', panel:1, persist:'working', act:2,
+ chunks:[{tex:'e^{t\\mathcal{L}^\\dagger}(\\sigma)\\ \\longrightarrow\\ \\rho\\propto e^{-\\beta H}',
+          say:"e to the t script L dagger, applied to any state sigma, converges to the Gibbs state"}],
+ post:"Start anywhere, wait, and you've prepared the thermal state. That's a real family of algorithms with a real literature behind it."},
+{op:'write', id:'q2', panel:1, persist:'working', act:2,
+ pre:"And the entire question of whether such an algorithm is useful reduces to one number: how long is 'wait'?",
+ chunks:[{tex:'t_{\\mathrm{mix}}\\ \\lesssim\\ \\mathrm{gap}(\\mathcal{L})^{-1}\\log(\\cdot)',
+          say:"The mixing time is at most one over the gap, times a logarithm"}],
+ post:"So proving these algorithms work means bounding spectral gaps. That is the whole game, and it's why a paper about a spectral gap is a paper about an algorithm."},
+{op:'annotate', style:'box', target:'q2', color:'yellow', act:2},
+
+{op:'head', id:'q3', panel:1, text:'What was missing', persist:'working', act:2, say:"Now, why does this need a new paper?"},
+{op:'say', act:2, text:"There is a substantial body of work bounding these gaps, and it's good work. But look at the hypotheses. High temperature — above some threshold. One-dimensional systems. Commuting Hamiltonians. Perturbative arguments, in space or in temperature. Decay-of-correlations assumptions."},
+{op:'write', id:'q4', panel:1, persist:'working', act:2,
+ chunks:[{tex:'\\text{known bounds}\\ \\Rightarrow\\ \\text{no phase transition}',
+          say:"Every existing technique either avoids a phase transition or breaks at one"}]},
+{op:'say', act:2, text:"That's not a coincidence. Those hypotheses are all, in one way or another, ways of guaranteeing the system is in a single well-behaved phase. Which is unfortunate, because near criticality is precisely where you'd most want to know whether your algorithm still runs in polynomial time. As the authors put it, we lack a precise understanding of these algorithms exactly where they'd be most applicable."},
+{op:'point', target:'q4', act:2},
+
+{op:'head', id:'q5', panel:1, text:'Why this model', persist:'working', act:2,
+ say:"So they choose a model with three properties that are hard to get simultaneously."},
+{op:'write', id:'q6', panel:1, persist:'working', act:2,
+ chunks:[{tex:'\\text{(i) non-commuting}',say:"One. The Hamiltonian is non-commuting."}],
+ post:"Most exactly-solvable examples in this area are commuting or stabiliser Hamiltonians, where the quantum problem secretly reduces to a classical one. The Heisenberg coupling genuinely does not commute across pairs."},
+{op:'write', id:'q7', panel:1, persist:'working', act:2, cont:true,
+ chunks:[{tex:'\\text{(ii) a real transition at }\\beta=2',say:"Two. It has an honest thermodynamic phase transition, at beta equals two, where SU two symmetry breaks."}]},
+{op:'write', id:'q8', panel:1, persist:'working', act:2, cont:true,
+ chunks:[{tex:'\\text{(iii) still tractable}',say:"Three. Despite that, it stays analytically tractable — because of all the symmetry we just set up."}]},
+{op:'say', act:2, text:"And the authors are refreshingly direct about the limitation: this model is classically simulable. There's no quantum advantage being claimed. The value is that it's a non-commuting system with a genuine transition where you can actually compute the answer, and where the techniques you develop might transfer to models where you can't."},
+{op:'say', act:2, text:"There's also a lineage worth knowing. Mean-field models have been the standard testbed for thermalisation for decades. The Curie–Weiss model — mean-field Ising — taught us about Glauber dynamics. The classical mean-field O(d) model, with continuous symmetry, was analysed by Becker and Menegaki, who found an n to the minus one low-temperature gap for Ginzburg–Landau dynamics. This paper is the quantum member of that family, and the fact that it reproduces the same n to the minus one scaling is a meaningful consistency check."},
+
+{op:'head', id:'q9', panel:2, text:'The main theorem', persist:'working', act:2, say:"Here's the result."},
+{op:'write', id:'q10', panel:2, persist:'working', act:2,
+ chunks:[{tex:'\\beta<2:\\ \\ \\mathrm{gap}(\\mathcal{L}_{\\mathrm{loc}})=\\Theta(1)',say:"For beta below two — high temperature — the gap is theta of one"}],
+ post:"Independent of system size. Thermalisation in constant time, no matter how many qubits."},
+{op:'write', id:'q11', panel:2, persist:'working', act:2,
+ chunks:[{tex:'\\beta>2:\\ \\ \\mathrm{gap}(\\mathcal{L}_{\\mathrm{loc}})=\\Theta(n^{-1})',say:"For beta above two — low temperature — the gap is theta of one over n"}]},
+{op:'annotate', style:'box', target:'q11', color:'yellow', act:2},
+{op:'beat', ms:3200, act:2},
+{op:'write', id:'q12', panel:2, persist:'working', act:2,
+ chunks:[{tex:'\\beta=2:\\ \\ \\Omega(n^{-1})\\le\\mathrm{gap}\\le O(n^{-1/2})',say:"And exactly at criticality, somewhere between one over n and one over root n"}],
+ post:"Tight everywhere off the critical point. At criticality there's a genuine gap between their bounds, and they say so rather than papering over it."},
+{op:'say', act:2, text:"Theta, note — not just a bound. Matching upper and lower estimates at every non-critical temperature. That's unusual in this literature, where one-sided bounds are the norm."},
+{op:'say', act:2, text:"And the headline qualitative point is that the low-temperature answer is polynomial, not exponential. Contrast the classical Curie–Weiss model: there, Glauber dynamics is exponentially slow at low temperature. Why? Because the broken symmetry is discrete — up or down — and to get from one phase to the other the system must pass through the unmagnetised state, which is exponentially unlikely. A macroscopic free-energy barrier."},
+{op:'say', act:2, text:"Here the broken symmetry is SU(2), which is continuous. The symmetry-broken states form a connected manifold — a sphere of directions the magnetisation could point. You never have to demagnetise to get from one to another; you just rotate. So instead of climbing over a barrier you drift along a valley floor, and that costs a factor of n rather than an exponential. The slowdown is real, but it's benign."},
+{op:'write', id:'q13', panel:2, persist:'working', act:2,
+ pre:"Which yields an algorithmic corollary.",
+ chunks:[{tex:'\\mathrm{poly}\\big(n,\\log\\tfrac1\\epsilon\\big)\\ \\text{gates}',say:"Polynomially many gates, in n and log one over epsilon"}],
+ post:"prepare the Gibbs state of this model at any fixed temperature, to trace distance epsilon. Efficient Gibbs sampling across the phase transition."},
+
+{op:'head', id:'q14', panel:2, text:'The strategy', persist:'working', act:2,
+ say:"Now the part I most want you to take away. How is the proof organised?"},
+{op:'say', act:2, text:"Entirely by symmetry, and the logic is the one we set up in the last prerequisite block. The generator is an intertwiner, so Schur's lemma splits the observable algebra into sectors it can never mix. The gap of the whole thing is the minimum over sectors. And then — this is the move — each sector gets a completely different argument, drawn from a different part of mathematics."},
+{op:'write', id:'q15', panel:2, persist:'working', act:2,
+ chunks:[{tex:'\\mathrm{gap}=\\min\\big\\{\\,\\mathrm{comm}(\\mathsf{S}_n)^{\\perp_\\rho}',say:"The gap is the minimum over three things. The non-permutation-invariant part,"},
+         {tex:',\\ \\mathcal{A}^{(0)}',say:"the fully invariant sector A zero,"},
+         {tex:',\\ \\mathcal{A}^{(\\ell\\ge1)}\\big\\}',say:"and the sectors A ell for ell at least one"}]},
+{op:'annotate', style:'box', target:'q15', color:'yellow', act:2},
+{op:'point', target:'q15', act:2},
+{op:'beat', ms:2600, act:2},
+{op:'arrow', from:'p5a', to:'q15', label:'Schur', act:2},
+{op:'say', act:2, text:"Three sectors, three arguments, and then one upper bound to prove the whole thing is tight. Let me take them in turn."},
+
+/* --- sector 1 --- */
+{op:'head', id:'r0', panel:1, text:'Sector 1: not permutation invariant', persist:'working', act:2, say:"First sector — observables that are not permutation invariant."},
+{op:'write', id:'r1', panel:1, persist:'working', act:2,
+ chunks:[{tex:'-\\mathcal{L}_{\\mathrm{loc}}\\big|_{\\mathrm{comm}(\\mathsf{S}_n)^{\\perp_\\rho}}\\ \\ge\\ \\Omega(1)',
+          say:"On the non-permutation-invariant part, minus the generator is bounded below by a constant"}],
+ post:"Constant, at every temperature. These degrees of freedom equilibrate fast, which is intuitively right — telling the spins apart is information that gets scrambled quickly."},
+{op:'say', act:2, text:"The technique here is the first of the paper's two reusable ideas, and they name it: the group mixer comparison argument. It has two steps, and the shape is worth memorising because it generalises far beyond this model."},
+{op:'say', act:2, text:"Step one. Invent an auxiliary Davies generator — they call it a group mixer — whose jump operators come from the symmetry group rather than from physics. You choose it so that its gap is computable by pure representation theory. It is not the dynamics you care about; it's a yardstick."},
+{op:'write', id:'r2', panel:1, persist:'working', act:2,
+ pre:"For the symmetric group, take transpositions as jumps.",
+ chunks:[{tex:'\\mathcal{L}_{\\mathsf{S}_n}(X)=\\sum_{\\sigma\\in T}\\sigma X\\sigma-X',
+          say:"Script L S n of X equals the sum over sigma in T of sigma X sigma, minus X"}],
+ post:"That's a Davies generator too — the transpositions commute with H, so all Bohr frequencies vanish and the general definition collapses to this."},
+{op:'say', act:2, text:"Now there's a genuinely clever choice hidden in the set T. The obvious thing is to take all transpositions — the complete graph. But that generator, the transposition semigroup, has gap of order n to the minus two. Far too weak; it would destroy the bound. So instead they take only the transpositions along the edges of a bounded-degree expander graph. A random walk on an expander has constant spectral gap, and a technique called group transference carries that classical constant over to the quantum generator. Fewer jumps, better bound — which is counterintuitive until you remember you're paying for each jump in step two."},
+{op:'write', id:'r3', panel:1, persist:'working', act:2,
+ pre:"Step two is the comparison. Show that the real dynamics simulates the yardstick.",
+ chunks:[{tex:'-\\mathcal{L}_{\\mathsf{S}_n}\\ \\le\\ c_1e^{\\beta c_2}\\cdot(-\\mathcal{L}_{\\mathrm{loc}})',
+          say:"Minus the auxiliary generator is at most a constant times minus the real one"}],
+ post:"An operator inequality between Dirichlet forms. The constant depends on beta but — and this is the crucial part — not on n."},
+{op:'say', act:2, text:"Intuitively: the mixer's jumps are two-site operators, the real generator's are single-site. Any two-site move can be built from single-site moves, so the local dynamics can imitate the mixer, at some temperature-dependent overhead. That's a path-comparison argument, directly analogous to the classical Markov chain technique of the same name."},
+
+/* --- sector 2 --- */
+{op:'head', id:'r4', panel:1, text:'Sector 2: fully invariant', persist:'working', act:2,
+ say:"Second sector, and this is where the physics of the problem actually lives."},
+{op:'write', id:'r5', panel:1, persist:'working', act:2,
+ chunks:[{tex:'\\mathcal{A}^{(0)}=\\mathrm{span}\\{\\Pi_s\\}',say:"A zero is spanned by the spectral projectors"}],
+ post:"An observable invariant under both rotations and permutations is a function of the total spin, nothing more."},
+{op:'say', act:2, text:"So on this sector the quantum problem degenerates into a classical one. The generator restricts to a classical Markov chain whose state space is the set of spin labels — a set of size order n, not two to the n. They call this the coarse-grained Pauli master equation: instead of tracking the full density matrix you track only which energy level you're in."},
+{op:'say', act:2, text:"And then the Wigner–Eckart theorem tells you which transitions are allowed. This is a selection rule, exactly as in atomic physics."},
+{op:'write', id:'r6', panel:1, persist:'working', act:2,
+ chunks:[{tex:'\\Pi_s S_i^\\alpha\\Pi_{s\'}=0',say:"Pi s, S i alpha, Pi s prime, vanishes"},
+         {tex:'\\ \\ \\text{unless } s\\in\\{s\'-1,s\',s\'+1\\}',say:"unless s differs from s prime by at most one"}],
+ post:"A single-site Pauli is a rank-one tensor operator. It can shift the total spin by at most one unit. So the transition matrix is tridiagonal."},
+{op:'annotate', style:'under', target:'r6', color:'yellow', act:2},
+{op:'say', act:2, text:"Tridiagonal, non-negative off the diagonal, columns summing to zero — that is a birth–death chain. Which means you are now in completely classical territory, with a century of tools available. They use Cheeger's inequality to convert the gap question into a question about the stationary measure, and then sharp tail bounds on that measure obtained by Laplace's method."},
+{op:'write', id:'r7', panel:1, persist:'working', act:2,
+ chunks:[{tex:'\\mathrm{gap}\\big(\\mathcal{L}_{\\mathrm{loc}}|_{\\mathcal{A}^{(0)}}\\big)=\\Omega(1),\\ \\ \\beta\\ne2',
+          say:"The gap on A zero is order one, for beta away from two"}],
+ post:"and order n to the minus one half exactly at criticality. This sector is also where the number two itself comes from — and that's the first thing we'll prove properly."},
+
+/* --- sector 3 --- */
+{op:'head', id:'r8', panel:2, text:'Sector 3: ℓ ≥ 1', persist:'working', act:2,
+ say:"Third sector. Here the answer genuinely depends on temperature, and it needs two different arguments."},
+{op:'say', act:2, text:"At low temperature the group mixer trick works again, but with SU(2) in place of the symmetric group. Same two-step shape: build an auxiliary generator from the group, compute its gap by representation theory, then show the real dynamics dominates it. It gives order one over n, and it is remarkably short. That's the second thing we'll prove properly."},
+{op:'write', id:'r9', panel:2, persist:'working', act:2,
+ chunks:[{tex:'\\beta\\ge2:\\ \\ -\\mathcal{L}_{\\mathrm{loc}}\\big|_{\\mathcal{A}^{(\\ell)}}\\ge\\Omega(n^{-1})',
+          say:"For beta at least two, minus the generator on A ell is at least order one over n"}]},
+{op:'say', act:2, text:"But here's the difficulty. That same argument also applies at high temperature — nothing in it used the temperature. And up there it gives one over n when the truth is a constant. So it's not wrong, it's just loose by a factor of n. And you can see it must be loose: at beta equals zero the dynamics is completely trivial, so the gap had better be constant."},
+{op:'say', act:2, text:"Recovering that constant needs the paper's second reusable technique, and it's the more inventive of the two. They construct a basis for the observable algebra out of spherical tensor operators — the same objects that appear in angular momentum theory in physics — chosen to simultaneously diagonalise three commuting superoperators."},
+{op:'write', id:'r10', panel:2, persist:'working', act:2,
+ chunks:[{tex:'T_{s,\\ell,q}',say:"T sub s, ell, q"}],
+ post:"Three labels: s the total spin, ell the rotational rank of the observable, and q the magnetic quantum number within that rank."},
+{op:'write', id:'r11', panel:2, persist:'working', act:2,
+ pre:"In that basis the generator becomes tridiagonal again — this time in s.",
+ chunks:[{tex:'-\\mathcal{L}_{\\mathrm{loc}}(T_{s,\\ell,q})=\\mathrm{d}^{(\\ell)}_{s,s}T_{s,\\ell,q}+\\mathrm{d}^{(\\ell)}_{s,s\\pm1}T_{s\\pm1,\\ell,q}',
+          say:"The generator acting on T s ell q returns a combination of T at s, s plus one, and s minus one"}],
+ post:"And the crucial observation: the coefficients d depend on ell, but not on q at all."},
+{op:'say', act:2, text:"That q-independence collapses an enormous amount of redundancy. Every one of the two ell plus one blocks labelled by q has identical spectrum, so you only need one of them. And then what falls out — after a fight with Wigner six-j symbols — is a monotonicity: the smallest eigenvalue on the sector A-ell increases with ell. Higher rotational rank means faster relaxation."},
+{op:'say', act:2, text:"Which is a beautiful reduction, because it means the whole tower is controlled by its base. You only have to handle ell equals one."},
+{op:'write', id:'r12', panel:2, persist:'working', act:2,
+ chunks:[{tex:'-\\mathcal{L}_{\\mathrm{loc}}\\big|_{\\mathcal{A}^{(1)}}\\ \\ge\\ c\\,(2-\\beta)',
+          say:"Minus the generator on A one is at least a constant times two minus beta"}],
+ post:"proved by an explicit Dirichlet form computation, in a manner inspired by Hardy's inequality."},
+{op:'annotate', style:'circle', target:'r12', color:'blue', act:2},
+{op:'beat', ms:2600, act:2},
+{op:'say', act:2, text:"And look at the shape of that bound. It degrades to nothing as beta approaches two from below. It has to — the estimate must fail at the transition, and it fails at exactly the right place, with the right linear rate. When a bound knows where the physics breaks, that's usually a sign the argument is capturing something real rather than being an artefact of the technique."},
+
+/* --- upper bound + what's new --- */
+{op:'head', id:'r13', panel:2, text:'Tightness', persist:'working', act:2, say:"That's all three lower bounds. One more ingredient."},
+{op:'say', act:2, text:"Everything so far bounds the gap from below, which is the statement that the algorithm is fast. To claim theta rather than omega you need a matching upper bound — a proof that the dynamics really is that slow. And by the variational principle, that needs just one well-chosen observable. Their choice is the total magnetisation, and we'll do that computation in full."},
+
+{op:'head', id:'r14', panel:2, text:'What is new', persist:'working', act:2, say:"So, stepping back. What should you actually take away?"},
+{op:'say', act:2, text:"Three things. First the result itself: this is the first systematic, non-perturbative characterisation of the spectral gap for a non-commuting quantum system in the presence of a thermodynamic phase transition. Everything before it either assumed high temperature or assumed the transition away."},
+{op:'say', act:2, text:"Second, the group mixer comparison argument. That's a general recipe, and it is the part most likely to be reused: whenever your Hamiltonian and your jump operators respect a symmetry group, you can bound the dissipation on the non-invariant sectors by comparing against a transferred classical random walk on that group. Nothing in it is specific to Heisenberg."},
+{op:'say', act:2, text:"Third, the spherical tensor decomposition, which converted an intractable block structure into a one-dimensional monotone tower. That's more bespoke, but the underlying idea — find a basis in which the symmetry makes the generator tridiagonal and the blocks redundant — is a strategy, not a trick."},
+{op:'say', act:2, text:"And one small observation they flag as a conjecture worth testing. The total magnetisation, the very order parameter that detects the static symmetry breaking, turns out also to witness the correct dynamical scaling. If that correspondence between static and dynamic order parameters is general, it gives a cheap diagnostic for guessing the dynamical phase diagram of a whole family of symmetric models — complete-graph XY, XXZ, higher-spin interchange models. That's the outlook."},
+{op:'say', act:2, text:"Alright. Let me clear the boards, and we'll prove three of these properly."}
+];
+
+/* ============================ ACT III ============================ */
+const ACT3 = [
+{op:'erase', panel:1, dive:'__always'},
+{op:'erase', panel:2, dive:'__always'},
+
+/* -------------------- d1 : where beta = 2 comes from -------------------- */
+{op:'head', id:'d1h', panel:1, text:'Deep dive 1: why β = 2', persist:'working', dive:'d1',
+ say:"Deep dive one. We have taken beta equals two as given all lecture. Where does the number actually come from? This is the prettiest computation in the paper, and it is entirely elementary."},
+{op:'say', dive:'d1',
+ text:"The setting is the invariant sector, where we said the dynamics becomes a birth–death chain on spin labels. Every birth–death chain has a stationary measure, and its gap is controlled by the shape of that measure. So: what is it?"},
+{op:'write', id:'d1a', panel:1, persist:'working', dive:'d1',
+ pre:"It's just the Gibbs weight of each sector.",
+ chunks:[{tex:'\\pi(s)=\\mathrm{Tr}\\big[\\rho\\,\\Pi_s\\big]',say:"pi of s equals the trace of rho against Pi s"}],
+ post:"the probability that a sample from the thermal state has total spin s."},
+{op:'write', id:'d1b', panel:1, persist:'working', dive:'d1',
+ pre:"And since the energy is constant on each sector, that's a dimension times a Boltzmann factor.",
+ chunks:[{tex:'\\pi(s)\\ \\propto\\ \\dim(\\Pi_s)\\cdot e^{\\beta s(s+1)/n}',
+          say:"pi of s is proportional to the dimension of the sector, times e to the beta s s plus one over n"}]},
+{op:'say', dive:'d1',
+ text:"Two factors, pulling in opposite directions. The dimension is an entropy: there are vastly more ways to build a low-spin state than a high-spin one — recall the spin-zero sector is exponentially large while the maximal-spin sector has dimension only n plus one. So entropy wants small s. The exponential is energy: the ferromagnet wants its spins aligned, so energy wants large s. Everything about the phase transition is the question of which one wins, and that depends on beta."},
+{op:'annotate', style:'under', target:'d1b', color:'yellow', dive:'d1'},
+{op:'write', id:'d1c', panel:1, persist:'working', dive:'d1',
+ pre:"To see the competition cleanly, rescale the spin so it lives on a fixed interval.",
+ chunks:[{tex:'x_s:=2s/n\\ \\in[0,1]',say:"x sub s is two s over n, running from zero to one"}],
+ post:"x equals zero is the unmagnetised state, x equals one is fully aligned."},
+{op:'write', id:'d1d', panel:1, persist:'working', dive:'d1',
+ pre:"In that variable both factors are exponentials in n, so the measure takes a large-deviations form.",
+ chunks:[{tex:'\\pi(s)\\ \\sim\\ g_\\beta(x_s)\\,e^{-n f_\\beta(x_s)}',
+          say:"pi of s behaves like g beta of x, times e to the minus n, f beta of x"}],
+ post:"g is a polynomial correction we can ignore. All the action is in f, and n is the large parameter."},
+{op:'write', id:'d1e', panel:1, persist:'working', dive:'d1',
+ pre:"And f is a free energy in the exact thermodynamic sense — energy minus entropy.",
+ chunks:[{tex:'f_\\beta(x)=-\\dfrac{\\beta}{4}x^2-H_b\\!\\left(\\dfrac{1+x}{2}\\right)',
+          say:"f beta of x equals minus beta over four, x squared, minus the binary entropy of one plus x over two"}],
+ post:"The first term is the energy, quadratic in the magnetisation as you'd expect for a ferromagnet. The second is the entropy, and H b is the binary entropy function."},
+{op:'point', target:'d1e', dive:'d1'},
+{op:'say', dive:'d1',
+ text:"Now. The measure concentrates where f is smallest. So the question 'is the system magnetised?' becomes the question 'where is the minimum of f?'. And since we care about whether the minimum sits at zero or moves away from it, we should expand f around x equals zero. Let's just do it."},
+
+{op:'write', id:'d1f', panel:2, persist:'working', dive:'d1',
+ pre:"The binary entropy has a standard expansion about one half. In nats,",
+ chunks:[{tex:'H_b\\!\\left(\\tfrac{1+x}{2}\\right)=\\ln 2-\\dfrac{x^2}{2}-\\dfrac{x^4}{12}-O(x^6)',
+          say:"binary entropy of one plus x over two equals log two, minus x squared over two, minus x to the fourth over twelve, and higher order"}],
+ post:"Maximal at x equals zero, as entropy should be, and decreasing as you polarise."},
+{op:'write', id:'d1g', panel:2, persist:'working', dive:'d1',
+ pre:"Substitute that into f, and mind the two minus signs.",
+ chunks:[{tex:'f_\\beta(x)=-\\ln2+\\Big(\\tfrac12-\\tfrac{\\beta}{4}\\Big)x^2+\\tfrac{1}{12}x^4+O(x^6)',
+          say:"f beta of x equals minus log two, plus, one half minus beta over four, times x squared, plus one twelfth x to the fourth"}]},
+{op:'write', id:'d1i', panel:2, persist:'working', dive:'d1', cont:true,
+ pre:"And collect the quadratic coefficient over a common denominator.",
+ chunks:[{tex:'=-\\ln2+\\tfrac14(2-\\beta)\\,x^2+\\tfrac1{12}x^4+O(x^6)',
+          say:"equals minus log two, plus one quarter, two minus beta, x squared, plus one twelfth x to the fourth"}]},
+{op:'annotate', style:'box', target:'d1i', color:'yellow', dive:'d1'},
+{op:'point', target:'d1i', dive:'d1'},
+{op:'beat', ms:4000, dive:'d1'},
+{op:'say', dive:'d1',
+ text:"And there it is. The coefficient of x squared is two minus beta, over four. That is the entire phase transition, sitting in one coefficient."},
+{op:'say', dive:'d1',
+ text:"Walk through the two cases. For beta below two the coefficient is positive, so f has a genuine minimum at x equals zero — the free energy is a bowl, the measure concentrates near zero, and the typical total spin is order root n rather than order n. The system is unmagnetised. For beta above two the coefficient turns negative, x equals zero flips from a minimum to a local maximum, and the minimiser slides out to some strictly positive x. The quartic term, which is always positive, is what stops it running off to infinity and pins it at a finite value inside the interval."},
+{op:'write', id:'d1j', panel:2, persist:'working', dive:'d1',
+ chunks:[{tex:'\\beta<2:\\ x_*=0',say:"Beta below two, the minimiser sits at zero."},
+         {tex:'\\qquad\\beta>2:\\ x_*\\in(0,1)',say:"Beta above two, it sits strictly inside the interval."}]},
+{op:'say', dive:'d1',
+ text:"That is a textbook Landau second-order transition — quadratic coefficient changes sign, quartic stabilises, order parameter turns on continuously. And the critical point is precisely where the quadratic coefficient vanishes. Two minus beta equals zero. Beta equals two. Not an assumption, not an input: an arithmetic consequence of entropy competing with energy, and the factor of one quarter comes from the one over n normalisation we chose right at the start."},
+{op:'say', dive:'d1',
+ text:"One more consequence, and it explains the odd exponent at criticality that I flagged earlier. To turn this free energy into the sharp tail bounds the proof needs, you apply Laplace's method: approximate the integral by a Gaussian around the minimiser. Laplace requires the second derivative there to be nonzero, and the width of that Gaussian scales like one over root n, times one over the square root of f double prime."},
+{op:'say', dive:'d1',
+ text:"But at beta exactly two the quadratic term vanishes identically, so f double prime at the minimum is zero. The minimum is quartic, not quadratic. The Gaussian approximation degrades, and the fluctuation scale changes from n to the minus one half to n to the minus one quarter. That degradation is exactly why the gap estimate on this sector weakens from a constant to order n to the minus one half at criticality, and it's why the authors are careful to exclude beta equals two from their tight statement. The mathematics is telling you the truth about the physics: critical slowing down is real."},
+
+/* -------------------- d2 : SU(2) mixer lower bound -------------------- */
+{op:'head', id:'d2h', panel:1, text:'Deep dive 2: lower bound Ω(1/n)', persist:'working', dive:'d2',
+ say:"Deep dive two. The low-temperature lower bound. I promised this one was short, and it genuinely is — but the shape of the argument is worth more than its length."},
+{op:'say', dive:'d2',
+ text:"Recall the two-step recipe. Build an auxiliary generator from the symmetry group whose gap you know for free, then show the real dynamics dominates it. Last time the group was the symmetric group. This time it's SU(2)."},
+{op:'write', id:'d2a', panel:1, persist:'working', dive:'d2',
+ pre:"Take as jump operators the total spin operators. These are global — every site at once — rather than local.",
+ chunks:[{tex:'S^\\alpha_{\\mathrm{tot}}=\\sum_{i=1}^{n}S_i^\\alpha',say:"S tot alpha is the plain sum over all sites of S i alpha"}],
+ post:"Unnormalised. There's no one over n here, and that will matter in about four minutes."},
+{op:'say', dive:'d2',
+ text:"Now, these are the generators of the su(2) Lie algebra acting on the system, and they commute with H — that's just the SU(2) invariance we established. Which means every Bohr frequency is zero, the frequency decomposition does nothing, and the general Davies formula collapses to something very simple."},
+{op:'write', id:'d2b', panel:1, persist:'working', dive:'d2',
+ chunks:[{tex:'\\mathcal{L}_{\\mathfrak{su}(2)}(X)=-\\tfrac12\\sum_{\\alpha\\in\\{X,Y,Z\\}}\\big[S^\\alpha_{\\mathrm{tot}},[S^\\alpha_{\\mathrm{tot}},X]\\big]',
+          say:"Script L s u two of X equals minus one half, sum over alpha, of the double commutator of S tot alpha with X"}],
+ post:"A sum of double commutators with the angular momentum generators. If that looks familiar, it should — it is precisely the quadratic Casimir of su(2), acting on the adjoint representation."},
+{op:'annotate', style:'under', target:'d2b', color:'yellow', dive:'d2'},
+{op:'say', dive:'d2',
+ text:"Which is wonderful, because the spectrum of the Casimir is not something we have to work for. Representation theory hands it to us. On an observable of rotational rank ell, the Casimir acts by ell times ell plus one. So the kernel is exactly the rank-zero observables — the ones invariant under rotation — and the smallest nonzero eigenvalue comes from rank one."},
+{op:'write', id:'d2c', panel:1, persist:'working', dive:'d2',
+ chunks:[{tex:'\\ker(\\mathcal{L}_{\\mathfrak{su}(2)})=\\mathrm{comm}(\\mathsf{SU}(2))',say:"Its kernel is the SU two commutant,"},
+         {tex:',\\quad \\mathrm{gap}=1',say:"and its gap is exactly one"}],
+ post:"Exactly one. Not order one — one. And no n anywhere in sight. That is the entire appeal of the auxiliary generator."},
+{op:'point', target:'d2c', dive:'d2'},
+{op:'beat', ms:2600, dive:'d2'},
+{op:'say', dive:'d2',
+ text:"So we have a yardstick with a perfect constant gap. Now the comparison step, and this is the punchline of the section."},
+{op:'write', id:'d2d', panel:1, persist:'working', dive:'d2',
+ pre:"Here's the claim. Using the unitary freedom in how you present the jump operators of a Davies generator, the real local generator can be rewritten so that the mixer appears inside it, scaled by one over n, plus a remainder.",
+ chunks:[{tex:'\\mathcal{L}_{\\mathrm{loc}}=\\tfrac1n\\mathcal{L}_{\\mathfrak{su}(2)}+\\mathcal{L}_{\\{B_4,\\dots,B_{3n}\\}}',
+          say:"Script L loc equals one over n times the mixer, plus a Davies generator built from remaining jump operators B four through B three n"}],
+ post:"There are three n single-site Paulis. Three of them recombine into the total spin operators; the other three n minus three become the B's."},
+{op:'write', id:'d2e', panel:1, persist:'working', dive:'d2',
+ pre:"And now the trivial but decisive observation. The remainder is itself a Davies generator, and Davies generators are negative semi-definite. So minus it is positive.",
+ chunks:[{tex:'-\\mathcal{L}_{\\{B_4,\\dots,B_{3n}\\}}\\ \\ge\\ 0',say:"Minus the remainder is positive semi-definite"}],
+ post:"Which means we can simply discard it, in the direction we need."},
+{op:'write', id:'d2f', panel:1, persist:'working', dive:'d2',
+ chunks:[{tex:'0\\ \\le\\ -\\tfrac1n\\mathcal{L}_{\\mathfrak{su}(2)}\\ \\le\\ -\\mathcal{L}_{\\mathrm{loc}}',
+          say:"Zero is at most minus one over n times the mixer, which is at most minus script L loc"}]},
+{op:'write', id:'d2g', panel:1, persist:'working', dive:'d2',
+ pre:"Combine with the mixer's gap of one, restrict to a sector where the mixer is not degenerate — that is, any ell at least one — and you're done.",
+ chunks:[{tex:'-\\mathcal{L}_{\\mathrm{loc}}\\big|_{\\mathcal{A}^{(\\ell)}}\\ \\ge\\ \\Omega(n^{-1})\\cdot\\mathbb{1}',
+          say:"Minus script L loc restricted to A super ell is at least order one over n, times the identity"}]},
+{op:'annotate', style:'box', target:'d2g', color:'yellow', dive:'d2'},
+{op:'beat', ms:3200, dive:'d2'},
+{op:'say', dive:'d2',
+ text:"That's the entire proof. Three lines of operator inequality on top of a Casimir computation you didn't have to do."},
+{op:'say', dive:'d2',
+ text:"But I want to spend a moment on where the one over n came from, because it is not bookkeeping and it is not an artefact. Look back at the jump operators. The mixer's jumps are the total spin operators, which are sums of n Pauli matrices, so their norm is order n. The real generator's jumps are single-site Paulis of norm one. A Davies generator scales quadratically in its jump operators, so expressing one in terms of the other has to cost you. You are paying for the privilege of making a global move using only local ones, and the price is exactly the factor we see. The physics and the algebra agree."},
+{op:'say', dive:'d2',
+ text:"A footnote on the text. As printed, the displayed inequality in this theorem appears to be missing a minus sign — it reads script L loc restricted to A ell is at least omega of one over n, but script L loc is negative semi-definite, so read literally that's false. The parallel statement earlier in the paper does carry the minus. I've written it with the minus, which is clearly what's meant, but it's worth checking with the authors."}
+];
+
+/* -------------------- d3 : order parameter upper bound -------------------- */
+const ACT3B = [
+{op:'head', id:'d3h', panel:2, text:'Deep dive 3: upper bound O(1/n)', persist:'working', dive:'d3',
+ say:"Deep dive three, and the last one. Everything so far has been lower bounds — statements that the dynamics is at least this fast. To claim theta we need the opposite: a proof that it really is that slow."},
+{op:'say', dive:'d3',
+ text:"And here the variational principle finally works in our favour rather than against us. Because the gap is a minimum over all observables, any single observable you plug in gives a valid upper bound. We need one good guess, and nothing more."},
+{op:'say', dive:'d3',
+ text:"The paper's guess is the physically motivated one: the total magnetisation in the z direction. There are two reasons to expect it to be the right choice. Physically, it's the order parameter that detects the static transition, so if anything relaxes slowly it should be this. Technically, it commutes with H, which will make the Dirichlet form computation clean, and it lives in the sector A one — the base of the tower, which we already know is the slowest."},
+{op:'write', id:'d3a', panel:2, persist:'working', dive:'d3',
+ chunks:[{tex:'\\mathrm{gap}(\\mathcal{L}_{\\mathrm{loc}})\\ \\le\\ \\dfrac{\\mathcal{E}[S^Z_{\\mathrm{tot}}]}{\\mathsf{Var}_\\rho[S^Z_{\\mathrm{tot}}]}',
+          say:"The gap is at most the Dirichlet form of S tot Z, over the variance of S tot Z"}],
+ post:"So the job is two lemmas: bound the numerator above, bound the denominator below."},
+{op:'arrow', from:'p2c', to:'d3a', label:'Rayleigh', dive:'d3'},
+
+{op:'say', dive:'d3', text:"Numerator first, and it's the easier of the two."},
+{op:'write', id:'d3b', panel:2, persist:'working', dive:'d3',
+ chunks:[{tex:'\\mathcal{E}[S^Z_{\\mathrm{tot}}]\\ \\le\\ n',say:"The Dirichlet form of S tot Z is at most n"}],
+ post:"Linear in n. And the proof is four steps, each of them crude."},
+{op:'say', dive:'d3',
+ text:"Step one. Because the magnetisation commutes with H, the commutator of a jump with it interacts nicely with the Bohr decomposition — the frequency component of the commutator is the commutator of the frequency component. That lets us apply the divergence form directly, and the X and Y Paulis are the only ones contributing, since the Z ones commute with S tot Z."},
+{op:'say', dive:'d3',
+ text:"Step two. Throw away the Metropolis weight — bound h omega by one. That's the crude step, and it costs nothing here."},
+{op:'say', dive:'d3',
+ text:"Step three, and this is the only clever move. Expanding the KMS norm gives a double sum over spin sectors and Bohr frequencies. But the projectors sum to the identity — twice — so both sums telescope away completely. What's left is a single trace with no sums at all."},
+{op:'write', id:'d3c', panel:2, persist:'working', dive:'d3',
+ chunks:[{tex:'\\sum_\\omega h_\\omega\\big\\|S_i^X(\\omega)\\big\\|_\\rho^2\\ \\le\\ \\mathrm{Tr}\\big[\\rho^{1/2}S_i^X\\rho^{1/2}S_i^X\\big]',
+          say:"The sum over omega collapses to the trace of rho to the half, S i X, rho to the half, S i X"}]},
+{op:'say', dive:'d3',
+ text:"Step four. Hölder's inequality bounds that trace by the square of the two-norm of rho to the half, times the operator norm of the Pauli squared. The two-norm of rho to the half is one, since rho has trace one, and a Pauli has norm one half in this convention. So each site contributes at most a quarter. There are n sites and a factor of two from the two contributing directions, and you land on n."},
+{op:'point', target:'d3b', dive:'d3'},
+{op:'say', dive:'d3',
+ text:"Nothing delicate anywhere in that. Which is a good sign — it means the upper bound isn't secretly doing the hard work; the interesting behaviour must be in the variance."},
+
+{op:'say', dive:'d3', text:"So. The denominator. And this is where the temperature finally enters."},
+{op:'write', id:'d3d', panel:2, persist:'working', dive:'d3',
+ pre:"First, the magnetisation is centred — its Gibbs expectation vanishes by symmetry — so the variance is just its KMS norm squared. And SU(2) invariance lets us replace the z component by a third of the full vector.",
+ chunks:[{tex:'\\mathrm{Tr}[\\rho(S^Z_{\\mathrm{tot}})^2]=\\tfrac13\\mathrm{Tr}[\\rho\\,\\mathbf{S}_{\\mathrm{tot}}^2]=\\tfrac13\\mathbb{E}_\\pi[s(s+1)]',
+          say:"Trace of rho, S tot Z squared, equals one third the trace of rho against S tot squared, which equals one third the expectation under pi of s times s plus one"}],
+ post:"And that pi is exactly the measure from deep dive one. So the entire question has become: how large is the typical total spin at temperature beta?"},
+{op:'annotate', style:'box', target:'d3d', color:'yellow', dive:'d3'},
+{op:'beat', ms:2600, dive:'d3'},
+{op:'say', dive:'d3',
+ text:"Which we already know qualitatively. Above the transition the free energy has its minimum at zero magnetisation, so the typical spin is order root n and the variance is order n. Below the transition the minimum has moved out to a positive fraction, so the typical spin is order n and the variance is order n squared. That factor of n between the two regimes is the whole result. Let's see it precisely."},
+{op:'write', id:'d3e', panel:2, persist:'working', dive:'d3',
+ pre:"They avoid Laplace's method here and do something more elementary — just examine consecutive ratios of the measure.",
+ chunks:[{tex:'\\dfrac{\\pi(s+1)}{\\pi(s)}\\ \\ge\\ 1',say:"pi of s plus one over pi of s is at least one,"},
+         {tex:'\\quad\\text{for } s\\le c_\\beta n',say:"for all s up to c beta times n"}]},
+{op:'write', id:'d3f', panel:2, persist:'working', dive:'d3',
+ chunks:[{tex:'c_\\beta=\\tfrac12-\\tfrac1\\beta',say:"where c beta is one half minus one over beta"}],
+ post:"Which is strictly positive exactly when beta exceeds two. The transition, again, and this time it falls out of two lines of arithmetic on a ratio of binomial coefficients."},
+{op:'annotate', style:'circle', target:'d3f', color:'blue', dive:'d3'},
+{op:'say', dive:'d3',
+ text:"So the measure is monotonically increasing all the way out to a constant fraction of n. And there's a lovely elementary argument that turns monotonicity into a tail bound, with no analysis at all."},
+{op:'say', dive:'d3',
+ text:"Let s star be the largest spin below c beta n. Since pi increases on that whole range, you can pair up each value below s star with a value above it — the smallest with s star plus one, the next with s star plus two, and so on — and every term on the left is dominated by its partner on the right. So the mass below s star is at most the mass above it. The two together are one. Therefore at least half the mass sits above s star, and s star is order n."},
+{op:'write', id:'d3g', panel:2, persist:'working', dive:'d3',
+ chunks:[{tex:'\\mathbb{E}_\\pi[s^2]\\ \\ge\\ s_*^2\\,\\pi\\big([s_*+1,\\tfrac n2]\\big)\\ \\ge\\ \\tfrac12 s_*^2',
+          say:"The expectation of s squared is at least s star squared times the mass above s star, which is at least half s star squared"}]},
+{op:'write', id:'d3h2', panel:2, persist:'working', dive:'d3',
+ chunks:[{tex:'\\Rightarrow\\ \\mathsf{Var}[S^Z_{\\mathrm{tot}}]\\ \\ge\\ c\\,c_\\beta^2\\,n^2',
+          say:"So the variance is at least a constant, times c beta squared, times n squared"}]},
+{op:'say', dive:'d3', text:"Now divide the two lemmas."},
+{op:'write', id:'d3i', panel:2, persist:'working', dive:'d3',
+ chunks:[{tex:'\\mathrm{gap}(\\mathcal{L}_{\\mathrm{loc}})\\ \\le\\ \\dfrac{n}{c\\,c_\\beta^2n^2}\\ =\\ n^{-1}\\cdot\\dfrac{c\\,\\beta^2}{(\\beta-2)^2}',
+          say:"The gap is at most n over c, c beta squared, n squared, which is one over n times c beta squared over beta minus two squared"}]},
+{op:'annotate', style:'box', target:'d3i', color:'yellow', dive:'d3'},
+{op:'point', target:'d3i', dive:'d3'},
+{op:'beat', ms:3600, dive:'d3'},
+{op:'say', dive:'d3',
+ text:"And that matches the lower bound from deep dive two. So for beta above two the gap is theta of one over n — both directions, tight. That completes the low-temperature half of the main theorem."},
+{op:'say', dive:'d3',
+ text:"Two closing observations on this bound. Note that the constant blows up as beta approaches two from above, since c beta goes to zero there. The bound becomes vacuous at criticality, exactly as it must — and that's the same c beta, from the same competition of entropy and energy, that we watched appear in deep dive one. Second, notice that the whole thing hinged on one observable being simultaneously easy to dissipate — Dirichlet form only order n — and enormous in variance, order n squared. That mismatch of scaling is what slow mixing means, made concrete."},
+
+/* ---------------- close ---------------- */
+{op:'say', dive:'__always',
+ text:"Let me close with the structural observation I'd most want you to leave with. Look at where the temperature entered. The lower bounds came from pure symmetry — auxiliary generators, a Casimir, an operator inequality — with no reference to beta at all. That's why the same argument works at every temperature, and why it's loose where it's loose. The temperature entered only through the upper bound, through a single test observable and the shape of the spin distribution. That separation between the symmetric skeleton and the thermodynamic input is what makes the argument robust, and it's the part most likely to transfer to models where you can't compute everything."},
+{op:'say', dive:'__always',
+ text:"And the observable that certifies the slowdown is the order parameter itself — the same quantity that detects the static symmetry breaking. Rotating the magnetisation costs almost nothing because SU(2) is continuous, so that mode drains at rate one over n and drags the whole spectrum down with it. If that correspondence between static and dynamic order parameters holds generally, it's a cheap diagnostic for the dynamical phase diagram of a whole family of symmetric models. The authors flag it as a conjecture worth testing, and it strikes me as the most promising thread to pull. Questions?"}
+];
+
+const SCRIPT = PREREQ.concat(ACT2, ACT3, ACT3B);
+
+
+/* ---------- adaptive plan: filter the script to the chosen depths ---------- */
+const level={};                       // block id -> 'full' | 'brief' | 'skip'
+BLOCKS.forEach(b=>level[b.id]='full');
+let PLAN=[];
+const dive={}; DIVES.forEach(d=>dive[d.id]=true);
+function buildPlan(){
+  PLAN=SCRIPT.filter(op=>{
+    if(op.block) return op.depth===level[op.block];          // Act I: adaptive depth
+    if(op.dive==='__always') return DIVES.some(d=>dive[d.id]); // only if some dive runs
+    if(op.dive) return dive[op.dive];                         // Act III: selectable
+    return true;                                              // Act II: always
+  });
+  return PLAN;
+}
+function actOf(op){ return op.block?1 : op.dive?3 : 2; }
+function planMinutes(){
+  let ms=0;
+  for(const op of PLAN){
+    const t=[op.text,op.pre,op.post,op.say].filter(Boolean).join(' ')+' '+
+            (op.chunks||[]).map(c=>c.say).join(' ');
+    if(t.trim()) ms+=estimate(t);
+    if(op.op==='write'||op.op==='head') ms+=420;
+    else if(op.op==='point') ms+=1400;
+    else if(op.op==='arrow') ms+=800;
+    else if(op.op==='annotate') ms+=650;
+  }
+  return Math.max(1,Math.round(ms/60000));
+}
+function renderCalib(){
+  const wrap=document.querySelector('#calib-rows'); wrap.innerHTML='';
+  const dwrap=document.querySelector('#dive-rows'); dwrap.innerHTML='';
+  for(const d of DIVES){
+    const row=document.createElement('div'); row.className='crow';
+    row.innerHTML='<span class="lbl" title="'+d.covers+'">'+d.title+' <em style="opacity:.5">'+d.covers+'</em></span>';
+    const seg=document.createElement('span'); seg.className='seg';
+    [[true,'prove it'],[false,'skip']].forEach(([v,lab])=>{
+      const btn=document.createElement('button'); btn.textContent=lab;
+      if(dive[d.id]===v) btn.classList.add('on');
+      btn.onclick=()=>{ dive[d.id]=v; buildPlan(); renderCalib(); };
+      seg.appendChild(btn);
+    });
+    row.appendChild(seg); dwrap.appendChild(row);
+  }
+  for(const b of BLOCKS){
+    const row=document.createElement('div'); row.className='crow';
+    row.innerHTML='<span class="lbl" title="'+b.probe+'">'+b.title+'</span>';
+    const seg=document.createElement('span'); seg.className='seg';
+    [['full','teach it'],['brief','remind me'],['skip','I know it']].forEach(([d,lab])=>{
+      const btn=document.createElement('button'); btn.textContent=lab;
+      if(level[b.id]===d) btn.classList.add('on');
+      btn.onclick=()=>{ level[b.id]=d; buildPlan(); renderCalib(); };
+      seg.appendChild(btn);
+    });
+    row.appendChild(seg); wrap.appendChild(row);
+  }
+  const per=[1,2,3].map(a=>PLAN.filter(o=>actOf(o)===a).length);
+  document.querySelector('#calib-est').textContent=
+    '≈ '+planMinutes()+' min total  ·  acts '+per.join(' / ')+' ops';
+}
+const PRESETS={
+  all: {p1:'full',p2:'full',p3:'full',p4:'full',p5:'full'},
+  qi:  {p1:'skip',p2:'brief',p3:'brief',p4:'full',p5:'brief'},
+  prob:{p1:'full',p2:'full',p3:'brief',p4:'brief',p5:'brief'},
+  none:{p1:'skip',p2:'skip',p3:'skip',p4:'skip',p5:'skip'}
+};
+
+/* ============================================================================ */
+const $=s=>document.querySelector(s);
+const board=$('#board'), overlay=$('#overlay'), hand=$('#hand'),
+      cap=$('#cap'), badge=$('#badge'), prog=$('#prog i'), prof=$('#prof');
+const panels=[...document.querySelectorAll('.panel')];
+const items=new Map(); const annos=[];
+let state={playing:false, speed:1, idx:0, run:0, qa:false};
+const sleep=ms=>new Promise(r=>setTimeout(r, ms/state.speed));
+async function gate(){ while(!state.playing || state.qa) await new Promise(r=>setTimeout(r,60)); }
+function setState(s){ document.body.dataset.state=s; }
+
+/* ---------- character animation ---------- */
+const MOUTHS=['M88 93 C94 98 106 98 112 93',        // closed smile
+              'M89 92 C94 103 106 103 111 92',      // open
+              'M90 93 C95 99 105 99 110 93',        // small
+              'M88 91 C94 106 106 106 112 91'];     // wide
+let mouthTimer=null;
+function talking(on){
+  const m=$('#mouth');
+  if(on){ if(mouthTimer) return;
+    mouthTimer=setInterval(()=>m.setAttribute('d', MOUTHS[1+Math.floor(Math.random()*3)]), 115);
+  } else { clearInterval(mouthTimer); mouthTimer=null; m.setAttribute('d', MOUTHS[0]); }
+}
+setInterval(()=>{                                   // blinking
+  const l=$('#eyeL'), r=$('#eyeR');
+  l.classList.add('blink'); r.classList.add('blink');
+  setTimeout(()=>{l.classList.remove('blink');r.classList.remove('blink');},110);
+}, 3200+Math.random()*2600);
+
+/* ---------- staging: keep the professor out of his own way ----------
+   A lecturer never stands in front of the thing he is writing. He steps
+   aside. So: score every standing position along the foot of the board by
+   how much board content it covers (pinned content weighted heaviest, the
+   line being written heavier still), minus a pull toward the active line so
+   he still looks connected to it. Walk to the best one.                    */
+const PROF_W=185, PROF_H=270;
+let profX=0;
+const overlap=(a,b)=>{
+  const w=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x);
+  const h=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);
+  return (w>0&&h>0)?w*h:0;
+};
+function boardRects(){
+  const b=board.getBoundingClientRect();
+  return [...document.querySelectorAll('.item')].map(el=>{
+    const r=el.getBoundingClientRect();
+    return {x:r.left-b.left, y:r.top-b.top, w:r.width, h:r.height,
+            wt: el.dataset.persist==='pinned'?3:1};
+  }).filter(r=>r.w>1&&r.h>1);
+}
+function placeProf(activeEl){
+  const b=board.getBoundingClientRect();
+  if(!b.width) return;
+  const py=b.height-PROF_H, rects=boardRects();
+  let actR=null;
+  if(activeEl){ const r=activeEl.getBoundingClientRect();
+    actR={x:r.left-b.left, y:r.top-b.top, w:r.width, h:r.height}; }
+
+  const N=11, span=Math.max(0,b.width-PROF_W);
+  let best=0, bestScore=Infinity;
+  for(let i=0;i<N;i++){
+    const x=Math.round(i*span/(N-1));
+    const box={x, y:py, w:PROF_W, h:PROF_H};
+    let s=0;
+    for(const r of rects) s+=overlap(box,r)*r.wt;
+    if(actR){
+      s+=overlap(box,actR)*10;                       // never cover the live line
+      s+=Math.abs((x+PROF_W/2)-(actR.x+actR.w/2))*0.30;   // but stay near it
+    }
+    if(s<bestScore){ bestScore=s; best=x; }
+  }
+  profX=best;
+  prof.style.transform=`translateX(${best}px)`;
+  const box={x:best,y:py,w:PROF_W,h:PROF_H};
+  prof.classList.toggle('duck', rects.reduce((a,r)=>a+overlap(box,r),0) > 2600);
+}
+
+function aimArm(el){                                 // point the writing arm at the active line
+  const arm=$('#armR'); if(!el){arm.style.transform='';return;}
+  const b=board.getBoundingClientRect(), r=el.getBoundingClientRect();
+  const sx=profX+PROF_W*0.63, sy=(b.height-PROF_H)+PROF_H*0.44;   // shoulder, in board coords
+  const dx=(r.left-b.left+r.width*0.4)-sx, dy=(r.top-b.top+r.height/2)-sy;
+  const ang=Math.atan2(dy,dx)*180/Math.PI;           // arm rests at ~+55deg
+  arm.style.transform=`rotate(${Math.max(-105,Math.min(10, ang-55)).toFixed(1)}deg)`;
+}
+
+/* ---------- glyphs ---------- */
+const GLYPH_RULE=n=>n.classList&&(n.classList.contains('frac-line')||n.classList.contains('rule')||
+  n.classList.contains('overline-line')||n.classList.contains('underline-line'));
+const isSpace=c=>c===' '||c===' '||c==='​';
+
+function splitGlyphs(host){
+  const html=host.querySelector('.katex-html')||host, out=[];
+  const w=document.createTreeWalker(html,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);
+  const nodes=[]; while(w.nextNode()) nodes.push(w.currentNode);
+  for(const n of nodes){
+    if(n.nodeType===3){
+      const chars=[...n.nodeValue]; if(!chars.length) continue;
+      const frag=document.createDocumentFragment();
+      for(const c of chars){
+        if(isSpace(c)){ frag.appendChild(document.createTextNode(c)); continue; }
+        const s=document.createElement('span'); s.className='glyph'; s.textContent=c;
+        s.style.setProperty('--rot',((Math.random()*2-1)*2.0).toFixed(2)+'deg');
+        s.style.setProperty('--dy',((Math.random()*2-1)*0.9).toFixed(2)+'px');
+        frag.appendChild(s); out.push(s);
+      }
+      n.parentNode.replaceChild(frag,n);
+    } else if(GLYPH_RULE(n)){ n.classList.add('glyph'); out.push(n); }
+  }
+  return out;
+}
+function splitText(el,str){
+  const out=[];
+  for(const c of str){
+    if(c===' '){ el.appendChild(document.createTextNode(' ')); continue; }
+    const s=document.createElement('span'); s.className='glyph'; s.textContent=c;
+    s.style.setProperty('--rot',((Math.random()*2-1)*2.4).toFixed(2)+'deg');
+    s.style.setProperty('--dy',((Math.random()*2-1)*1.1).toFixed(2)+'px');
+    el.appendChild(s); out.push(s);
+  }
+  return out;
+}
+const _gc=new Map();
+function countGlyphs(tex){
+  if(_gc.has(tex)) return _gc.get(tex);
+  const probe=document.createElement('span');
+  probe.style.cssText='position:absolute;left:-9999px;top:0;visibility:hidden';
+  document.body.appendChild(probe);
+  try{ katex.render(tex,probe,{throwOnError:false}); }catch(e){}
+  const html=probe.querySelector('.katex-html')||probe; let n=0;
+  const w=document.createTreeWalker(html,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);
+  while(w.nextNode()){
+    const nd=w.currentNode;
+    if(nd.nodeType===3){ for(const c of nd.nodeValue) if(!isSpace(c)) n++; }
+    else if(GLYPH_RULE(nd)) n++;
+  }
+  probe.remove(); _gc.set(tex,n); return n;
+}
+function chunkRanges(chunks, total){
+  const counts=chunks.map(c=>countGlyphs(c.tex));
+  const sum=counts.reduce((a,b)=>a+b,0), out=[]; let p=0;
+  if(sum===total){ counts.forEach(n=>{out.push([p,p+n]);p+=n;}); return out; }
+  counts.forEach((n,i)=>{                              // proportional fallback
+    const take=i===counts.length-1 ? total-p : Math.round(n/Math.max(sum,1)*total);
+    out.push([p,p+take]); p+=take;
+  });
+  return out;
+}
+function autofit(item){
+  const fit=item.querySelector('.fit'); fit.style.transform='none';
+  const avail=item.clientWidth, need=fit.scrollWidth;
+  if(need>avail && avail>0) fit.style.transform=`scale(${(avail/need*0.985).toFixed(3)})`;
+}
+
+/* ---------- speech ---------- */
+let VOICE=null;
+function loadVoices(){
+  const vs=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  if(!vs.length) return;
+  /* Edge/Windows "Online (Natural)" voices are neural and the best available anywhere;
+     macOS "Premium"/"Enhanced" next; then Chrome's bundled Google voices. */
+  const score=v=>(/natural|online/i.test(v.name)?120:0)
+                +(/premium|enhanced/i.test(v.name)?100:0)
+                +(/^Google /i.test(v.name)?45:0)
+                +(/en-US|en-GB/i.test(v.lang)?20:0)
+                +(/(Ava|Zoe|Evan|Serena|Samantha|Alex|Daniel|Aria|Guy|Jenny|Ryan|Sonia)/i.test(v.name)?10:0);
+  const nice=v=>v.name.replace(/^Microsoft\s+/,'').replace(/\s*-\s*English.*$/i,'')
+                      .replace(/\s*\((Natural|Premium|Enhanced)\)/i,'').trim();
+  vs.sort((a,b)=>score(b)-score(a));
+  const sel=$('#voicePick'); sel.innerHTML='';
+  vs.forEach(v=>{ const o=document.createElement('option');
+    o.value=v.name; o.textContent=nice(v)+(/natural|online|premium|enhanced/i.test(v.name)?' ★':'');
+    sel.appendChild(o); });
+  VOICE=vs[0]; sel.value=VOICE.name;
+  sel.onchange=()=>{ VOICE=vs.find(v=>v.name===sel.value); };
+}
+if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+
+const WPS=1.97;    // ~118 wpm — measured pace of a careful maths lecture, not audiobook
+const estimate=t=>Math.max(650, t.trim().split(/\s+/).length/WPS*1000);
+
+/* TTS provider seam. Swap this for pre-rendered audio or an API and everything
+   above keeps working unchanged. */
+function speak(text, opts={}){
+  return new Promise(res=>{
+    if(!$('#voiceOn').checked || !('speechSynthesis' in window))
+      return setTimeout(res, estimate(text)/state.speed);
+    const u=new SpeechSynthesisUtterance(text);
+    if(VOICE) u.voice=VOICE;
+    u.rate=Math.min(2.2, (opts.rate||0.86)*state.speed);
+    u.pitch=opts.pitch||0.92;
+    let done=false; const fin=()=>{ if(done) return; done=true; talking(false); res(); };
+    u.onstart=()=>talking(true); u.onend=fin; u.onerror=fin;
+    setTimeout(fin, estimate(text)*2.6/state.speed);   // safety net
+    speechSynthesis.speak(u);
+  });
+}
+function showCap(text, cls){ cap.className=cls||''; cap.textContent=text; }
+
+/* ---------- write: speak-while-writing ---------- */
+async function revealRange(glyphs,[a,b],budget){
+  const seg=glyphs.slice(a,b);
+  if(!seg.length){ await sleep(budget); return; }
+  const writeMs=Math.min(budget*0.88, seg.length*88);
+  const step=writeMs/seg.length;
+  for(const g of seg){ g.classList.add('inked'); await sleep(step); }
+  await sleep(Math.max(0, budget-writeMs));
+}
+async function doWrite(op){
+  const panel=panels[op.panel];
+  const item=document.createElement('div');
+  item.className='item'+(op.op==='head'?' head':'')+(op.cont?' cont':'')+(op.scratch?' scratch':'');
+  item.dataset.id=op.id||''; item.dataset.persist=op.persist||'working';
+  const fit=document.createElement('div'); fit.className='fit';
+  item.appendChild(fit); panel.appendChild(item);
+
+  let glyphs, ranges, chunks;
+  if(op.op==='head'){
+    glyphs=splitText(fit, op.text);
+    chunks=[{tex:null, say:op.say||op.text}]; ranges=[[0,glyphs.length]];
+  } else {
+    chunks=op.chunks;
+    const host=document.createElement('span'); fit.appendChild(host);
+    try{ katex.render(chunks.map(c=>c.tex).join(' '), host, {throwOnError:false, displayMode:false}); }
+    catch(e){ host.textContent=chunks.map(c=>c.tex).join(' '); }
+    glyphs=splitGlyphs(host);
+    ranges=chunkRanges(chunks, glyphs.length);
+  }
+  if(op.derived){ const p=document.createElement('span'); p.className='prov';
+    p.title=op.prov||'Agent-derived step'; item.appendChild(p); }
+  autofit(item);
+  if(op.id) items.set(op.id,{el:item, glyphs});
+
+  if(op.pre){ await gate(); setState('idle'); aimArm(null); placeProf(null);
+              showCap(op.pre); await speak(op.pre); await sleep(120); }
+
+  placeProf(item);                                     // step clear of the line before writing it
+  if(!op.cont) await sleep(280);                       // give him time to walk
+
+  for(let k=0;k<chunks.length;k++){
+    await gate();                                      // barge-in lands here
+    setState('writing'); aimArm(item);
+    showCap(chunks[k].say);
+    const budget=estimate(chunks[k].say);
+    const spoken=speak(chunks[k].say);
+    await revealRange(glyphs, ranges[k], budget);
+    await spoken;
+    await sleep(90);                                   // beat between phrases
+  }
+  item.classList.add('done');
+  if($('#chalkTx').checked) item.classList.add('chalked');
+  setState('idle'); aimArm(null);
+  if(!op.scratch && op.id) history.push({id:op.id, said:chunks.map(c=>c.say).join(' ')});
+  if(op.post){ await gate(); showCap(op.post); await speak(op.post); }
+  await sleep(180);
+}
+
+/* ---------- annotations ---------- */
+function rectOf(id,range){
+  const rec=items.get(id); if(!rec) return null;
+  const b=board.getBoundingClientRect(); let r;
+  if(range && rec.glyphs.length){
+    const sel=rec.glyphs.slice(range[0], Math.min(range[1]+1, rec.glyphs.length));
+    if(!sel.length) return null;
+    let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
+    sel.forEach(g=>{const q=g.getBoundingClientRect();
+      x1=Math.min(x1,q.left);y1=Math.min(y1,q.top);x2=Math.max(x2,q.right);y2=Math.max(y2,q.bottom);});
+    r={left:x1,top:y1,width:x2-x1,height:y2-y1};
+  } else r=rec.el.getBoundingClientRect();
+  return {x:r.left-b.left, y:r.top-b.top, w:r.width, h:r.height};
+}
+const COL={yellow:'#f2d98a', blue:'#a8cbe0', white:'#e9e5d8'};
+const svgEl=(t,a)=>{const e=document.createElementNS('http://www.w3.org/2000/svg',t);
+  for(const k in a) e.setAttribute(k,a[k]); return e;};
+
+function doAnnotate(op,replay){
+  const r=rectOf(op.target,op.glyphs); if(!r) return;
+  const c=COL[op.color||'yellow'], pad=5; let el,len;
+  if(op.style==='box'){
+    const x=r.x-pad,y=r.y-pad-1,w=r.w+pad*2,h=r.h+pad*2, wob=()=>(Math.random()*2-1)*1.8;
+    el=svgEl('path',{d:`M${x+wob()},${y+wob()} L${x+w+wob()},${y+wob()} L${x+w+wob()},${y+h+wob()} L${x+wob()},${y+h+wob()} Z`,
+      stroke:c,'stroke-width':1.7}); len=2*(w+h)+20;
+  } else if(op.style==='circle'){
+    const cx=r.x+r.w/2, cy=r.y+r.h/2, rx=r.w/2+7, ry=r.h/2+5;
+    el=svgEl('path',{d:`M${cx+rx},${cy} a${rx},${ry} 0 1,1 -0.6,-${ry*0.12} a${rx*1.02},${ry*1.03} 0 1,0 1.4,${ry*0.1}`,
+      stroke:c,'stroke-width':1.6}); len=2*Math.PI*Math.max(rx,ry)+30;
+  } else {
+    const y=r.y+r.h+3;
+    el=svgEl('path',{d:`M${r.x},${y} Q${r.x+r.w*.5},${y+3.2} ${r.x+r.w},${y-.8}`,stroke:c,'stroke-width':1.9});
+    len=r.w+18;
+  }
+  el.style.setProperty('--len',len); el.style.setProperty('--dur',(replay?1:560)+'ms');
+  overlay.appendChild(el); if(!replay) annos.push(op);
+}
+function doArrow(op,replay){
+  const a=rectOf(op.from), b=rectOf(op.to); if(!a||!b) return;
+  const x1=a.x+a.w, y1=a.y+a.h/2, x2=b.x-6, y2=b.y+b.h/2;
+  const mx=(x1+x2)/2, my=(y1+y2)/2-Math.abs(x2-x1)*.13-14;
+  const el=svgEl('path',{d:`M${x1+6},${y1} Q${mx},${my} ${x2},${y2}`,stroke:'#f2d98a',
+    'stroke-width':1.5,'marker-end':'url(#arrowhead)',opacity:.8});
+  el.style.setProperty('--len',Math.hypot(x2-x1,y2-y1)*1.4+40);
+  el.style.setProperty('--dur',(replay?1:700)+'ms');
+  overlay.appendChild(el);
+  if(op.label){ const t=svgEl('text',{x:mx,y:my-4,'text-anchor':'middle'}); t.textContent=op.label; overlay.appendChild(t); }
+  if(!replay) annos.push(op);
+}
+function redrawAnnos(){ overlay.innerHTML=''; annos.forEach(o=>o.op==='arrow'?doArrow(o,true):doAnnotate(o,true)); }
+let rt; addEventListener('resize',()=>{clearTimeout(rt);
+  rt=setTimeout(()=>{items.forEach(v=>autofit(v.el));redrawAnnos();placeProf(null);},180);});
+
+async function doPoint(op){
+  const r=rectOf(op.target,op.glyphs); if(!r) return;
+  placeProf(items.get(op.target).el); await sleep(240);   // step beside it, not in front of it
+  setState('pointing'); aimArm(items.get(op.target).el);
+  hand.classList.add('show');
+  hand.style.transform=`translate(${r.x+r.w+6}px, ${r.y+r.h/2-8}px)`;
+  await sleep(op.hold||1400);
+  setState('idle');
+}
+const hideHand=()=>{ hand.classList.remove('show'); aimArm(null); };
+
+async function doErase(op){
+  const panel=panels[op.panel];
+  const targets=[...panel.querySelectorAll('.item')].filter(el=>
+    op.ids ? op.ids.includes(el.dataset.id) : el.dataset.persist!=='pinned');
+  if(!targets.length) return;
+  setState('writing');
+  const band=document.createElement('div'); band.className='eraser'; band.style.top='-46px';
+  panel.appendChild(band);
+  const ph=panel.clientHeight, dur=900;
+  band.animate([{transform:'translateY(0)'},{transform:`translateY(${ph+60}px)`}],
+    {duration:dur/state.speed, easing:'ease-in-out'});
+  targets.forEach(el=>{
+    const rel=el.offsetTop/Math.max(ph,1);
+    setTimeout(()=>{ el.style.height=el.offsetHeight+'px'; el.classList.add('wiped');
+      requestAnimationFrame(()=>{el.style.height='0px';el.style.margin='0';}); },(rel*dur*.8+90)/state.speed);
+  });
+  await sleep(dur+300); band.remove();
+  targets.forEach(el=>{ items.delete(el.dataset.id); el.remove(); });
+  for(let i=0;i<3;i++){ const s=document.createElement('div'); s.className='smudge';
+    s.style.cssText+=`left:${10+Math.random()*55}%;top:${10+Math.random()*60}%;width:${70+Math.random()*90}px;height:${26+Math.random()*30}px;`;
+    panel.appendChild(s); }
+  for(let i=annos.length-1;i>=0;i--){
+    const o=annos[i];
+    if([o.target,o.from,o.to].filter(Boolean).some(id=>!items.has(id))) annos.splice(i,1);
+  }
+  redrawAnnos(); setState('idle'); placeProf(null);
+}
+
+async function doSay(op){
+  setState('idle'); hideHand(); placeProf(null);        // drift to the clearest spot while talking
+  showCap(op.text); badge.className='on'; badge.textContent='lecturing';
+  await speak(op.text); await sleep(200);
+}
+
+async function doQuestion(op){
+  hideHand();
+  showCap('“'+op.text+'”','student');
+  badge.className='on student'; badge.textContent='student · interrupt';
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+  talking(false); setState('listening');
+  await sleep(1700);
+
+  if(op.tier==='deep'){
+    setState('thinking'); badge.className='on deep';
+    badge.textContent='deep tier · thinking '+op.latency;
+    showCap('…');
+    for(let i=0;i<op.think.length;i++){
+      await doWrite({op:'write', id:'__th'+i, panel:2, persist:'ephemeral', scratch:true,
+                     chunks:[{tex:op.think[i].tex, say:op.think[i].say}]});
+      setState('thinking'); await sleep(400);
+    }
+    await sleep(600);
+  } else {
+    badge.className='on'; badge.textContent=op.tier+' tier · '+op.latency;
+    await sleep(900);
+  }
+  if(op.point) await doPoint({target:op.point, hold:900});
+  showCap(op.answer); badge.className='on'; badge.textContent='answering';
+  await speak(op.answer);
+  if(op.tier==='deep'){ await sleep(400); await doErase({panel:2, ids:op.think.map((_,i)=>'__th'+i)}); }
+  hideHand(); setState('idle'); await sleep(250);
+}
+
+/* ---------- main loop ---------- */
+async function runOp(op){
+  try{
+    if(op.op==='say') await doSay(op);
+    else if(op.op==='write'||op.op==='head') await doWrite(op);
+    else if(op.op==='annotate'){ doAnnotate(op); await sleep(650); }
+    else if(op.op==='arrow'){ doArrow(op); await sleep(800); }
+    else if(op.op==='point') await doPoint(op);
+    else if(op.op==='erase') await doErase(op);
+    else if(op.op==='question') await doQuestion(op);
+    else if(op.op==='beat'){ setState('idle'); await sleep(op.ms||2600); }
+  }catch(e){ console.warn('op failed',op,e); }
+}
+async function play(){
+  const myRun=++state.run;
+  if(!PLAN.length) buildPlan();
+  while(state.idx<PLAN.length){
+    await gate(); if(myRun!==state.run) return;
+    const op=PLAN[state.idx], a=actOf(op);
+    const ab=$('#actbadge'); ab.className='on';
+    ab.textContent=a===1?'act I · background':a===2?'act II · the paper':'act III · proofs';
+    await runOp(op);
+    if(myRun!==state.run) return;
+    state.idx++; prog.style.width=(state.idx/PLAN.length*100)+'%';
+  }
+  state.playing=false; $('#play').textContent='▶ Play';
+  badge.className='on'; badge.textContent='end';
+  showCap('Done. '+PLAN.length+' ops at your chosen depth. Ask me anything about the setup or the statement.');
+  setState('idle'); hideHand(); talking(false);
+}
+
+/* ---------- controls ---------- */
+$('#play').onclick=()=>{
+  state.playing=!state.playing;
+  $('#play').textContent=state.playing?'❚❚ Pause':'▶ Play';
+  if('speechSynthesis' in window){ state.playing?speechSynthesis.resume():speechSynthesis.pause(); }
+  if(!state.playing) talking(false);
+  if(state.playing && state.idx===0) play();
+};
+$('#restart').onclick=()=>{
+  state.run++; state.playing=false; state.idx=0;
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+  talking(false);
+  panels.forEach(p=>[...p.children].forEach(c=>{ if(!c.classList.contains('panel-tag')) c.remove(); }));
+  overlay.innerHTML=''; items.clear(); annos.length=0; history.length=0;
+  hideHand(); setState('idle'); prog.style.width='0';
+  prof.classList.remove('duck'); profX=0; prof.style.transform='translateX(0)';
+  $('#play').textContent='▶ Play'; badge.className=''; buildPlan(); renderCalib();
+  showCap('Set your background above, then press Play.'); $('#actbadge').className='';
+};
+$('#speed').onchange=e=>state.speed=parseFloat(e.target.value);
+$('#chalkTx').onchange=e=>document.body.classList.toggle('nochalk', !e.target.checked);
+/* ============================================================================
+   INTERACTION — ask the lecturer a question, by voice or text.
+
+   This is a faithful mock of the three-tier router in the plan. The reflex and
+   fast tiers use NO model: they retrieve from a hand-authored knowledge base
+   that stands in for the semantic graph the compiler would emit. That is the
+   point — it demonstrates that most real lecture questions are answerable from
+   structure alone, in single-digit milliseconds. Only unmatched questions
+   escalate to the deep tier.
+   ============================================================================ */
+
+const NOTATION={
+ 'l loc':{ref:'p1b', say:"Script L loc. The Davies generator whose jump operators are the single-site Pauli matrices, three per site."},
+ 'jump operator':{ref:'p1b', say:"The operators through which the bath couples. Here the single-site Paulis. They get split by Bohr frequency before they act."},
+ 'bohr frequency':{ref:'p1c', say:"A difference of energy eigenvalues. Each jump operator is decomposed into pieces that shift the energy by a fixed amount, and each piece gets its own rate."},
+ 'metropolis':{ref:'p1d', say:"Gamma of omega equals min of one and e to the minus beta omega. Downhill free, uphill exponentially suppressed. It satisfies classical detailed balance."},
+ 'gibbs state':{ref:'p1e', say:"Rho equals e to the minus beta H over Z. The unique fixed point of the Davies generator."},
+ 'kms':{ref:'p2a', say:"The KMS inner product: trace of rho to the half, X dagger, rho to the half, Y. The generator is self-adjoint in it, which is what detailed balance buys you."},
+ 'detailed balance':{ref:'p2b', say:"Self-adjointness in the KMS inner product. It gives a real spectrum and a variational principle, without which none of this would be computable."},
+ 'dirichlet form':{ref:'p2d', say:"E of X, defined as X paired with minus script L of X in the KMS inner product. It measures dissipation."},
+ 'variance':{ref:'p2d', say:"The KMS norm squared of X minus its mean. The denominator of the Rayleigh quotient."},
+ 'gap':{ref:'p2c', say:"The minimum over observables of the Dirichlet form divided by the variance. One test observable gives an upper bound; a lower bound must hold for all of them."},
+ 'mixing time':{ref:'p2e', say:"How long until the state is close to Gibbs. Bounded by one over the gap, times a logarithm. It's why the gap is the algorithmic question."},
+ 'divergence form':{ref:'p3a', say:"Writing the Dirichlet form as a weighted sum of commutator norms. Dissipation is failure to commute with the jump operators."},
+ 'casimir':{ref:'p4c', say:"The quadratic Casimir. Up to a shift and a factor of minus one over n, it is the Heisenberg Hamiltonian — which is why the spectrum is pure representation theory."},
+ 'pi s':{ref:'p4c', say:"The orthogonal projector onto the total-spin-s sector. The Hamiltonian is constant on each one."},
+ 'schur weyl':{ref:'p4b', say:"Schur–Weyl duality. It decomposes n qubits into joint irreps of the symmetric group and SU(2), each with multiplicity one, indexed by total spin."},
+ 'intertwiner':{ref:'p5b', say:"An operator commuting with a group action. The Davies generator is one, which is what lets Schur's lemma split the observable algebra into invariant sectors."},
+ 'a ell':{ref:'p5a', say:"A super ell. The SU(2) isotypic sectors of the permutation-invariant observables, graded by rotational rank. Ell zero is rotation invariant."},
+ 'a zero':{ref:'p5d', say:"A zero, the span of the spectral projectors — observables that are functions of the total spin alone. Dimension order n, not exponential."},
+ 's tot':{ref:'d2a', say:"S tot alpha, the total spin operator — the plain unnormalised sum of the single-site Paulis. Its norm is order n, and that is where the factor of one over n comes from."},
+ 'group mixer':{ref:'r2', say:"An auxiliary Davies generator built from the symmetry group, introduced purely as a yardstick. Its gap is known by representation theory; then you show the real generator dominates it."},
+ 'expander':{ref:'r2', say:"A bounded-degree graph whose random walk has constant spectral gap. Using expander edges rather than all transpositions is what turns an n to the minus two bound into a constant."},
+ 'wigner eckart':{ref:'r6', say:"The selection rule. A single-site Pauli is a rank-one tensor operator, so it can shift the total spin by at most one unit — which makes the transition matrix tridiagonal."},
+ 'spherical tensor':{ref:'r10', say:"T s ell q. A basis for the observable algebra diagonalising three commuting superoperators at once. In it the generator is tridiagonal in s, with coefficients independent of q."},
+ 'beta':{ref:'q11', say:"Inverse temperature. Large beta is cold. The transition sits at beta equals two."},
+ 'order parameter':{ref:'d3a', say:"The total magnetization S tot Z. It detects the static symmetry breaking, and in this paper it also witnesses the dynamical slowdown."},
+ 'free energy':{ref:'d1e', say:"f beta of x. Energy minus entropy, as a function of rescaled magnetization. Its quadratic coefficient is two minus beta over four, and that is the phase transition."}
+};
+
+const FACTS=[
+ {topic:"what the paper proves", keys:['main theorem','the theorem','main result','what do they prove','what is proved','headline'], point:'q11',
+  say:"That the spectral gap of the local Davies generator is theta of one above the critical temperature, and theta of one over n below it. Tight in both directions at every non-critical temperature. At beta exactly two they only get a window, between one over n and one over root n."},
+
+ {topic:"why this problem matters", keys:['why care','why does this matter','motivation','why is this interesting','so what'], point:'q2',
+  say:"Because preparing thermal states is one of the most plausible uses of a quantum computer, and the natural algorithm is to run a dissipative process to its fixed point. The runtime of that algorithm is one over the spectral gap. So bounding the gap is the same problem as proving the algorithm works."},
+
+ {topic:"what was missing before", keys:['what was missing','gap in the literature','new','why a paper','existing work','prior work'], point:'q4',
+  say:"Every existing technique either assumes high temperature, or one dimension, or commuting Hamiltonians, or perturbative expansions. All of those are ways of guaranteeing you're inside a single phase. This is the first non-perturbative characterisation for a non-commuting system with a genuine thermodynamic phase transition."},
+
+ {topic:"why this particular model", keys:['why mean field','why heisenberg','why this model','why complete graph'], point:'q6',
+  say:"It's the rare model with three properties at once: genuinely non-commuting, a real symmetry-breaking transition, and still analytically tractable thanks to the SU(2) and permutation symmetry. The authors are explicit that it's classically simulable — the value is the technique, not a speedup."},
+
+ {topic:"the overall proof strategy", keys:['strategy','how is the proof organised','structure','outline','roadmap','how do they prove'], point:'q15',
+  say:"Entirely by symmetry. The generator is an intertwiner, so Schur's lemma splits the observable algebra into sectors it can never mix, and the gap is the worst over sectors. Then each sector gets a completely different argument: group mixer comparison for the non-permutation-invariant part, a classical birth-death chain for the fully invariant part, and either the SU(2) mixer or spherical tensors for the rest."},
+
+ {topic:"the group mixer comparison argument", keys:['group mixer','mixer','auxiliary','comparison argument','transference'], point:'r2',
+  say:"Two steps. Invent an auxiliary Davies generator whose jump operators come from the symmetry group, chosen so representation theory hands you its gap for free. Then prove an operator inequality showing the real generator dominates it. It's the paper's most reusable idea — nothing in it is specific to Heisenberg."},
+
+ {topic:"why an expander instead of all transpositions", keys:['expander','why not all transpositions','sparse','graph','which transpositions'], point:'r2',
+  say:"Because the generator built from all transpositions has gap of order n to the minus two — far too weak. A random walk on a bounded-degree expander has constant gap, and group transference carries that constant to the quantum generator. Fewer jumps, better bound, because you pay for each jump in the comparison step."},
+
+ {topic:"where the factor of 1/n comes from", keys:['where does the n come from','factor of n','why 1/n','why one over n','1 over n'], point:'d2d',
+  say:"From the norm of the jump operators. The su(2) mixer's jumps are the total spin operators, unnormalised sums over all n sites, so their norm is order n. The real generator uses single-site Paulis of norm one. A Davies generator scales quadratically in its jumps, so expressing one through the other costs exactly a factor of n. It's the price of making a global move out of local ones."},
+
+ {topic:"why the leftover term can be discarded", keys:['leftover','remainder','discard','throw away','negative semi','b4'], point:'d2e',
+  say:"Because it's itself a Davies generator, and those are negative semi-definite. So minus it is positive semi-definite, and dropping it only weakens the inequality in the safe direction."},
+
+ {topic:"where beta = 2 comes from", keys:['beta equals two','beta 2','why 2','critical temperature','critical point','where does the transition'], point:'d1i',
+  say:"From the quadratic coefficient of the free energy. Expand f beta around zero magnetisation and the x squared coefficient is two minus beta over four. Positive below beta two, so zero magnetisation is a minimum; negative above, so the minimiser moves out. The critical point is exactly where that coefficient vanishes. Entropy versus energy, nothing more."},
+
+ {topic:"why the gap degrades at criticality", keys:['criticality','at beta 2','n^-1/2','root n','why not tight','critical slowing'], point:'d1i',
+  say:"Because Laplace's method needs the second derivative of the free energy at its minimum to be nonzero, and at beta exactly two the quadratic term vanishes identically. The minimum becomes quartic, the Gaussian width degrades from n to the minus one half to n to the minus one quarter, and the gap estimate weakens correspondingly. Critical slowing down, showing up in the analysis."},
+
+ {topic:"the spherical tensor technique", keys:['spherical tensor','monotonicity','high temperature','beta less than 2','tower','q independent'], point:'r10',
+  say:"A basis diagonalising three commuting superoperators at once, in which the generator becomes tridiagonal in the spin label with coefficients independent of q. That q-independence collapses the block structure, and what falls out is a monotonicity — the smallest eigenvalue increases with rotational rank. So the whole tower is controlled by its base at ell equals one."},
+
+ {topic:"why an upper bound only needs one observable", keys:['one observable','single observable','test observable','why upper bound easy','why is the upper bound'], point:'d3a',
+  say:"Because the gap is a minimum of the Rayleigh quotient over all observables. Any particular observable you plug in therefore gives an upper bound. The lower bound is the hard direction — it has to hold uniformly over everything at once."},
+
+ {topic:"why the magnetization is the right test observable", keys:['why magnetization','why s tot z','why that observable','which observable','why the order parameter'], point:'d3a',
+  say:"Three reasons. It's the order parameter that detects the static transition, so you expect it to be slow. It commutes with H, which makes the Dirichlet form computation clean. And it lives in A one, the base of the tower, which the monotonicity result already tells you is the slowest sector."},
+
+ {topic:"how the Dirichlet form bound is proved", keys:['dirichlet bound','numerator','how do you bound e','less than n','four steps'], point:'d3b',
+  say:"Four crude steps. Use that the magnetisation commutes with H so the Bohr decomposition passes through. Bound the Metropolis weight by one. Insert two resolutions of the identity so the double sum telescopes to a single trace. Then Hölder gives a quarter per site, and there are n sites."},
+
+ {topic:"why the variance is order n squared", keys:['variance','denominator','n squared','second moment','pairing'], point:'d3g',
+  say:"Below the transition the spin distribution increases monotonically out to c beta times n. So you can pair each value below the halfway point with a heavier one above it, which forces at least half the mass above a spin of order n. The second moment is then order n squared, no analysis required."},
+
+ {topic:"why the slowdown is polynomial rather than exponential", keys:['exponential','polynomial','ising','curie weiss','compare','barrier','discrete'], point:'q11',
+  say:"Because the broken symmetry is continuous. In the mean-field Ising model the symmetry is discrete — up or down — so getting between phases means passing through the unmagnetised state, an exponentially unlikely free-energy barrier. Here the symmetry-broken states form a connected manifold, so you rotate along a valley floor instead of climbing a barrier. That costs a factor of n, not an exponential."},
+
+ {topic:"what the algorithmic payoff is", keys:['algorithm','corollary','gibbs sampling','quantum advantage','useful','application','circuit'], point:'q13',
+  say:"A corollary: polynomially many gates, in n and log one over epsilon, prepare the Gibbs state of this model at any fixed temperature. Efficient Gibbs sampling right across the phase transition. But the authors stress the model is classically simulable, so this is a proof of principle rather than a speedup."},
+
+ {topic:"what to take away", keys:['take away','summary','what is new','contribution','conclusion','main contribution'], point:'r14',
+  say:"Three things. The result — first non-perturbative gap characterisation for a non-commuting system through a phase transition. The group mixer comparison argument, which is a general recipe for any symmetric model. And the spherical tensor decomposition, which turned an intractable block structure into a monotone tower. Plus a conjecture: that the static order parameter generally witnesses the dynamical scaling."},
+
+ {topic:"what this lecture skipped", keys:['what did you skip','not covered','rest of the paper','appendix','what else','omitted'], point:'r12',
+  say:"The appendices, which is where most of the sixty-three pages live — the group transference machinery, the Wigner-Eckart computations, the Laplace method details, and the six-j symbol manipulations behind the monotonicity. I gave you the main text: the statements, the strategy, and three proofs in full."},
+
+ {topic:"what paper this is", keys:['what paper','which paper','who wrote','authors','citation','reference','arxiv'],
+  say:"Basso, Bergamaschi, Lin, Ragone and Stubbs. arXiv twenty-six oh seven, two one seven nine eight, posted the twenty-third of July twenty twenty-six. Sixty-three pages and one figure, quant-ph and math-ph."}
+];
+
+const COMMANDS=[
+ {cmd:'repeat', keys:['repeat','say that again','again please','once more','didnt catch','did not catch']},
+ {cmd:'back',   keys:['go back','previous line','back up','last line','step back']},
+ {cmd:'slower', keys:['slower','slow down','too fast']},
+ {cmd:'faster', keys:['faster','speed up','too slow']},
+ {cmd:'pause',  keys:['pause','hold on','wait a moment','stop for a second']},
+ {cmd:'resume', keys:['continue','carry on','go on','keep going','resume']},
+ {cmd:'restart',keys:['start over','from the beginning','restart']},
+ {cmd:'skipblock',keys:['skip this','i know this','i know that','move on','skip ahead','next section','skip the background','already know']}
+];
+
+const history=[];                                     // written lines, for repeat / go back
+const norm=s=>' '+s.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim()+' ';
+const hit=(t,k)=>t.includes(' '+k+' ');            // whole-token only: bare "t" must not match "the"
+
+function matchCommand(q){ const t=norm(q);
+  for(const c of COMMANDS) if(c.keys.some(k=>hit(t,k))) return c.cmd; return null; }
+function matchFact(q){ const t=norm(q); let best=null,bs=0;
+  for(const f of FACTS){ let s=0;
+    for(const k of f.keys) if(hit(t,k)) s+=k.split(' ').length;
+    if(s>bs){bs=s;best=f;} }
+  return bs>=1?best:null; }
+function matchNotation(q){ const t=norm(q); let best=null,bl=0;
+  for(const k in NOTATION) if(hit(t,k) && k.length>bl){ best=k; bl=k.length; }
+  return best?{key:best,...NOTATION[best]}:null; }
+/* "what is q?" wants the notation table; "what breaks if X isn't complete?" wants the
+   fact base. Definitional phrasing decides which gets first refusal. */
+const isDefinitional=q=>{ const t=norm(q);
+  return /\b(what is|what s|whats|what does|what do|what are|remind me|meaning of|define|stands for)\b/.test(t)
+         && t.trim().split(' ').length<=7; };
+function route(q){
+  const c=matchCommand(q); if(c) return {tier:'cmd', cmd:c};
+  if(isDefinitional(q)){ const n=matchNotation(q); if(n) return {tier:'notation', n}; }
+  const f=matchFact(q);  if(f) return {tier:'fact', f};
+  const n=matchNotation(q); if(n) return {tier:'notation', n};
+  return {tier:'deep'};
+}
+
+/* --- optional deep tier: local Ollama, no API key. Auto-detected on load. --- */
+const LLM={ok:false, url:'http://localhost:11434', model:null};
+async function probeLLM(){
+  try{
+    const c=new AbortController(); setTimeout(()=>c.abort(),1200);
+    const r=await fetch(LLM.url+'/api/tags',{signal:c.signal});
+    const j=await r.json();
+    if(j.models&&j.models.length){ LLM.ok=true; LLM.model=j.models[0].name; }
+  }catch(e){}
+}
+async function askLLM(q){
+  const sys="You are a mathematics professor mid-lecture, at the blackboard, teaching the Banach fixed-point theorem to first-year graduate students. A student just asked a question. Answer in two to four spoken sentences. Plain speech only: no LaTeX, no markdown, no symbols — every formula must be written out in words as you would say it aloud. If you are unsure, say so.";
+  const c=new AbortController(); setTimeout(()=>c.abort(),60000);
+  const r=await fetch(LLM.url+'/api/chat',{method:'POST',signal:c.signal,
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:LLM.model,stream:false,
+      messages:[{role:'system',content:sys},{role:'user',content:q}]})});
+  const j=await r.json();
+  return (j.message&&j.message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();
+}
+
+
+/* "I don't actually know that" — expand a block that was skipped or abbreviated.
+   Distinct from a notation lookup: this is a request to be TAUGHT it. */
+const wantsTeaching=q=>/\b(explain|explain to me|go over|teach me|walk me through|what exactly is|i don'?t know|i dont know|never seen|not familiar|remind me how)\b/.test(norm(q));
+function matchBlock(q){
+  const t=norm(q); let best=null,bs=0;
+  for(const b of BLOCKS){
+    const words=(b.title+' '+b.probe).toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>4);
+    let s=0; for(const w of new Set(words)) if(t.includes(' '+w)) s++;
+    if(s>bs){bs=s;best=b;}
+  }
+  return bs>=1?best:null;
+}
+async function teachBlock(b){
+  const ops=SCRIPT.filter(o=>o.block===b.id && o.depth==='full' && o.op!=='head');
+  showCap("Of course — let me actually do "+b.title.toLowerCase()+".");
+  await speak("Of course. Let me actually do that properly.");
+  for(const op of ops) await runOp(op);
+  level[b.id]='full'; buildPlan(); renderCalib();
+  showCap("That's the background. Back to where we were.");
+  await speak("That's the background. Back to where we were.");
+}
+
+/* --- the router --- */
+function bargeIn(){ if('speechSynthesis' in window) speechSynthesis.cancel(); talking(false); }
+
+async function answerWith(text, point, scratch, label, ms){
+  badge.className='on'; badge.textContent=label+' · '+ms+'ms';
+  if(scratch){
+    setState('thinking');
+    for(let i=0;i<scratch.length;i++)
+      await doWrite({op:'write', id:'__q'+i, panel:2, persist:'ephemeral', scratch:true,
+                     chunks:[{tex:scratch[i].tex, say:scratch[i].say}]});
+  }
+  if(point && items.has(point)) await doPoint({target:point, hold:800});
+  showCap(text); setState('idle');
+  await speak(text);
+  if(scratch){ await sleep(500); await doErase({panel:2, ids:scratch.map((_,i)=>'__q'+i)}); }
+  hideHand();
+}
+
+async function handleQuestion(text){
+  if(!text||!text.trim()||state.qa) return;
+  state.qa=true; bargeIn();
+  const t0=performance.now();
+  showCap('“'+text.trim()+'”','student');
+  badge.className='on student'; badge.textContent='student · interrupt';
+  setState('listening');
+  await new Promise(r=>setTimeout(r,600));
+
+  try{
+    const R=route(text);
+    const cmd=R.tier==='cmd'?R.cmd:null;
+    if(cmd){
+      const ms=Math.round(performance.now()-t0);
+      badge.className='on'; badge.textContent='reflex · '+ms+'ms';
+      const last=history[history.length-1], prev=history[history.length-2];
+      if(cmd==='repeat'&&last){ if(items.has(last.id)) await doPoint({target:last.id,hold:600});
+        showCap(last.said); await speak(last.said); hideHand(); }
+      else if(cmd==='back'&&prev){ if(items.has(prev.id)) await doPoint({target:prev.id,hold:600});
+        showCap("Sure — going back a step. "+prev.said); await speak("Sure, going back a step. "+prev.said); hideHand(); }
+      else if(cmd==='slower'){ const s=Math.max(.75,state.speed-.25); state.speed=s; $('#speed').value=String(s);
+        showCap("Alright, slowing down."); await speak("Alright, slowing down."); }
+      else if(cmd==='faster'){ const s=Math.min(2,state.speed+.5); state.speed=s; $('#speed').value=String(s);
+        showCap("Speeding up."); await speak("Speeding up."); }
+      else if(cmd==='pause'){ state.playing=false; $('#play').textContent='▶ Play';
+        showCap("Paused. Say “continue” when you're ready."); await speak("Paused. Say continue when you're ready."); }
+      else if(cmd==='resume'){ if(!state.playing){ state.playing=true; $('#play').textContent='❚❚ Pause';
+          if(state.idx===0) play(); } showCap("Right — where were we."); await speak("Right, where were we."); }
+      else if(cmd==='restart'){ state.qa=false; $('#restart').click(); return; }
+      else if(cmd==='skipblock'){
+        const cur=PLAN[state.idx]&&PLAN[state.idx].block;
+        if(cur){ while(state.idx<PLAN.length && PLAN[state.idx].block===cur) state.idx++;
+                 level[cur]='skip'; renderCalib();
+                 showCap("Fine \u2014 skipping ahead."); await speak("Fine, skipping ahead."); }
+        else { showCap("We're already past the background."); await speak("We're already past the background."); } }
+      else { showCap("Nothing to go back to yet."); await speak("Nothing to go back to yet."); }
+      state.qa=false; badge.textContent='lecturing'; return;
+    }
+
+    if(R.tier==='notation'){
+      await answerWith(R.n.say, R.n.ref, null, 'reflex', Math.round(performance.now()-t0));
+      state.qa=false; return; }
+
+    if(R.tier==='fact'){
+      await answerWith(R.f.say, R.f.point, R.f.scratch, 'fast', Math.round(performance.now()-t0));
+      state.qa=false; return; }
+
+    if(wantsTeaching(text)){
+      const b=matchBlock(text);
+      if(b){ badge.className='on'; badge.textContent='expanding \u00b7 '+b.id;
+             await teachBlock(b); state.qa=false; return; }
+    }
+
+    /* deep tier */
+    setState('thinking'); showCap('…');
+    badge.className='on deep'; badge.textContent=LLM.ok?('deep · '+LLM.model):'deep · thinking';
+    if(LLM.ok){
+      let out=null;
+      try{ out=await askLLM(text); }catch(e){}
+      const ms=Math.round(performance.now()-t0);
+      if(out) await answerWith(out, null, null, 'deep · '+LLM.model, ms);
+      else await answerWith("The local model didn't come back in time. Try again, or ask me something from the lecture itself.", null, null, 'deep · failed', ms);
+    } else {
+      await new Promise(r=>setTimeout(r,2200));
+      const topics=FACTS.slice(0,6).map(f=>f.topic).join('; ');
+      await answerWith("That's outside what I have in the lecture graph for this theorem, and I'd rather say so than guess. I can speak to: "+topics+
+        ". For anything else, point me at a local model and I'll actually reason about it.",
+        null, null, 'deep · no match', Math.round(performance.now()-t0));
+    }
+  } catch(err){ console.warn(err); }
+  finally{ state.qa=false; setState('idle'); badge.textContent='lecturing'; }
+}
+
+/* --- speech recognition --- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const srstat=$('#srstat');
+let rec=null, listening=false;
+function srMsg(h){ srstat.innerHTML=h; }
+
+function initSR(){
+  if(!SR){ $('#mic').disabled=true; $('#alwaysOn').disabled=true;
+    srMsg('No speech recognition in this browser — <b>use the text box</b>.'); return; }
+  rec=new SR(); rec.lang='en-US'; rec.interimResults=true; rec.continuous=true;
+  rec.onresult=e=>{
+    let interim='', final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal) final+=r[0].transcript; else interim+=r[0].transcript;
+    }
+    if((interim+final).trim() && !state.qa) bargeIn();          // stop mid-word
+    if(interim) srMsg('<span id="heard">'+interim+'…</span>');
+    if(final.trim()){ srMsg(''); handleQuestion(final.trim()); }
+  };
+  rec.onerror=e=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed')
+      srMsg('Mic blocked. Chrome disables it on <b>file://</b> — serve over localhost, or use the text box.');
+    else if(e.error==='network') srMsg('Speech service unreachable — <b>use the text box</b>.');
+    else if(e.error!=='no-speech'&&e.error!=='aborted') srMsg('Mic error: '+e.error);
+    stopListen();
+  };
+  rec.onend=()=>{ if(listening&&$('#alwaysOn').checked){ try{rec.start();}catch(e){} } else stopListen(); };
+  srMsg('Hold the mic button (or the <b>Q</b> key) and ask.');
+}
+function startListen(){ if(!rec||listening) return; listening=true;
+  $('#mic').classList.add('live'); try{rec.start();}catch(e){} }
+function stopListen(){ listening=false; $('#mic').classList.remove('live'); try{rec&&rec.stop();}catch(e){} }
+
+$('#mic').addEventListener('mousedown',startListen);
+addEventListener('mouseup',()=>{ if(!$('#alwaysOn').checked) stopListen(); });
+addEventListener('keydown',e=>{ if(e.key==='q'&&!e.repeat&&document.activeElement!==$('#qtext')) startListen(); });
+addEventListener('keyup',  e=>{ if(e.key==='q'&&!$('#alwaysOn').checked) stopListen(); });
+$('#alwaysOn').onchange=e=>{
+  if(e.target.checked){ startListen();
+    srMsg('Always listening — <b>wear headphones</b>, or he will hear himself and interrupt his own sentence.'); }
+  else { stopListen(); srMsg('Hold the mic button (or the <b>Q</b> key) and ask.'); }
+};
+$('#qtext').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.value.trim()){ handleQuestion(e.target.value.trim()); e.target.value=''; }
+  e.stopPropagation();
+});
+
+addEventListener('keydown',e=>{
+  if(e.code==='Space'&&document.activeElement!==$('#qtext')){ e.preventDefault(); $('#play').click(); }
+});
+
+/* --- environment check: tell a first-time visitor what will and won't work --- */
+function envCheck(){
+  const bar=$('#envbar'), rows=[];
+  const isFile=location.protocol==='file:';
+  const ua=navigator.userAgent;
+  const chromium=/Chrome|Chromium|Edg/.test(ua)&&!/OPR/.test(ua);
+  const safari=/Safari/.test(ua)&&!/Chrome|Chromium|Edg/.test(ua);
+  const firefox=/Firefox/.test(ua);
+
+  if(isFile && !safari) rows.push('<span class="warn">▲ Opened as a file.</span> The board and typed questions work, but Chrome blocks the microphone on <code>file://</code>. For voice, run the <code>start-mac.command</code> / <code>start-windows.bat</code> launcher in this folder.');
+  const fontsOK=!document.fonts||document.fonts.check('16px KaTeX_Math');
+  if(!fontsOK) rows.push('<span class="warn">▲ Math fonts didn\'t load</span> — symbols will look wrong. The launcher script fixes this too.');
+
+  const nv=('speechSynthesis' in window)?speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang)).length:0;
+  if(!('speechSynthesis' in window)) rows.push('<span class="bad">✕ No speech synthesis</span> — the lecture will run silently with captions.');
+  else if(!nv) rows.push('<span class="warn">▲ No English system voices found.</span> On Linux install <code>espeak-ng</code>; on Windows add a voice in Settings → Time &amp; Language → Speech.');
+  else if(!/natural|online|premium|enhanced/i.test((VOICE&&VOICE.name)||'')){
+    const win=/Windows/.test(ua), mac=/Mac OS X/.test(ua);
+    rows.push('<span class="warn">▲ Only basic system voices.</span> '+(
+      win ? 'Open this page in <b>Microsoft Edge</b> instead — Edge exposes the Microsoft Natural neural voices, which are the best available on any platform. Big difference, no install.'
+      : mac? 'System Settings → Accessibility → Spoken Content → System Voice → <b>Manage Voices</b>, and install <b>Ava</b> or <b>Zoe (Premium)</b>. Big difference, takes a minute.'
+      : 'Install better voices for your system, or expect a robotic reading.'));
+  }
+
+  if(!SR) rows.push('<span class="warn">▲ No speech recognition in '+(firefox?'Firefox':'this browser')+'</span> — use the text box, or open in Safari, Chrome or Edge for voice input.');
+
+  if(!rows.length) rows.push('<span class="ok">✓ Board, voice output and microphone all available.</span> Hold the mic button or the <b>Q</b> key to interrupt him.');
+  bar.innerHTML=rows.join('<br>'); bar.classList.add('show');
+}
+
+let _tries=0;
+(function ready(){
+  if(typeof katex==='undefined'){
+    if(++_tries>80){                                   // ~5s: local assets AND cdn both failed
+      $('#envbar').innerHTML='<span class="bad">✕ KaTeX failed to load.</span> Keep the <code>assets/</code> folder next to this file, or connect to the internet so the CDN fallback can be used.';
+      $('#envbar').classList.add('show'); return;
+    }
+    return setTimeout(ready,60);
+  }
+  buildPlan(); renderCalib();
+  document.querySelectorAll('#calib .presets button').forEach(btn=>{
+    btn.onclick=()=>{
+      if(btn.dataset.preset) Object.assign(level,PRESETS[btn.dataset.preset]);
+      if(btn.dataset.dpreset) DIVES.forEach(d=>dive[d.id]=btn.dataset.dpreset==='all');
+      buildPlan(); renderCalib();
+    };
+  });
+  initSR();
+  setTimeout(envCheck,700);                            // let voices + fonts settle first
+  probeLLM().then(()=>{ if(LLM.ok) srMsg('Deep tier live via local <b>'+LLM.model+'</b>. Hold the mic or the <b>Q</b> key.'); });
+})();
+</script>
+</body>
+</html>
